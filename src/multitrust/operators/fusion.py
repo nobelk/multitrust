@@ -1,21 +1,13 @@
 from __future__ import annotations
 
 from multitrust.core.opinion import Opinion
+from multitrust.operators.constants import (
+    EPSILON_DEGENERATE,
+    EPSILON_DOGMATIC,
+    EPSILON_ZERO_DENOM,
+)
 from multitrust.operators.mapping import evidence_to_opinion, opinion_to_evidence
-
-
-def _clamp_opinion(
-    belief: float, disbelief: float, uncertainty: float, base_rate: float
-) -> Opinion:
-    """Clamp all values to [0,1] and normalize bdu to sum to 1."""
-    belief = max(0.0, belief)
-    disbelief = max(0.0, disbelief)
-    uncertainty = max(0.0, uncertainty)
-    base_rate = max(0.0, min(1.0, base_rate))
-    total = belief + disbelief + uncertainty
-    if total < 1e-15:
-        return Opinion(0.0, 0.0, 1.0, base_rate)
-    return Opinion(belief / total, disbelief / total, uncertainty / total, base_rate)
+from multitrust.operators.normalize import normalize_opinion
 
 
 def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
@@ -23,7 +15,7 @@ def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
     u_A = a.uncertainty
     u_B = b.uncertainty
 
-    if u_A == 0.0 and u_B == 0.0:
+    if u_A < EPSILON_DOGMATIC and u_B < EPSILON_DOGMATIC:
         # Both dogmatic: use evidence-weighted combination
         try:
             r_A, s_A = opinion_to_evidence(a)
@@ -35,7 +27,7 @@ def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
             r_B, s_B = 0.0, 0.0
 
         total = r_A + s_A + r_B + s_B
-        if total < 1e-15:
+        if total < EPSILON_DEGENERATE:
             gamma_A = 0.5
             gamma_B = 0.5
         else:
@@ -46,21 +38,37 @@ def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
         disbelief = gamma_A * a.disbelief + gamma_B * b.disbelief
         uncertainty = 0.0
         base_rate = gamma_A * a.base_rate + gamma_B * b.base_rate
-        return _clamp_opinion(belief, disbelief, uncertainty, base_rate)
+        return normalize_opinion(belief, disbelief, uncertainty, base_rate, operation="cumulative_fusion[dogmatic]")
 
     denom = u_A + u_B - u_A * u_B
 
-    if denom < 1e-10:
-        # Near-zero denominator: use evidence accumulation
+    if denom < EPSILON_ZERO_DENOM:
+        # Near-zero denominator: use gamma-weighted combination (same as dogmatic branch)
         try:
             r_A, s_A = opinion_to_evidence(a)
-            r_B, s_B = opinion_to_evidence(b)
-            base = (a.base_rate + b.base_rate) / 2
-            return evidence_to_opinion(r_A + r_B, s_A + s_B, base_rate=base)
         except Exception:
-            pass
-        base = (a.base_rate + b.base_rate) / 2
-        return _clamp_opinion(a.belief + b.belief, a.disbelief + b.disbelief, 0.0, base)
+            r_A, s_A = None, None
+        try:
+            r_B, s_B = opinion_to_evidence(b)
+        except Exception:
+            r_B, s_B = None, None
+
+        if r_A is not None and r_B is not None:
+            total = r_A + s_A + r_B + s_B
+            if total < EPSILON_DEGENERATE:
+                gamma_A = 0.5
+                gamma_B = 0.5
+            else:
+                gamma_A = (r_A + s_A) / total
+                gamma_B = (r_B + s_B) / total
+        else:
+            gamma_A = 0.5
+            gamma_B = 0.5
+
+        belief = gamma_A * a.belief + gamma_B * b.belief
+        disbelief = gamma_A * a.disbelief + gamma_B * b.disbelief
+        base_rate = gamma_A * a.base_rate + gamma_B * b.base_rate
+        return normalize_opinion(belief, disbelief, 0.0, base_rate, operation="cumulative_fusion[near-zero-denom]")
 
     belief = (a.belief * u_B + b.belief * u_A) / denom
     disbelief = (a.disbelief * u_B + b.disbelief * u_A) / denom
@@ -71,14 +79,14 @@ def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
         base_rate = (a.base_rate + b.base_rate) / 2
     else:
         denom2 = u_A + u_B - 2 * u_A * u_B
-        if abs(denom2) < 1e-15:
+        if abs(denom2) < EPSILON_DEGENERATE:
             base_rate = (a.base_rate + b.base_rate) / 2
         else:
             base_rate = (
                 a.base_rate * u_B + b.base_rate * u_A - (a.base_rate + b.base_rate) * u_A * u_B
             ) / denom2
 
-    return _clamp_opinion(belief, disbelief, uncertainty, base_rate)
+    return normalize_opinion(belief, disbelief, uncertainty, base_rate, operation="cumulative_fusion")
 
 
 def multi_source_cumulative_fusion(opinions: list[Opinion]) -> Opinion:
@@ -95,7 +103,7 @@ def averaging_fusion(a: Opinion, b: Opinion) -> Opinion:
     """Averaging Belief Fusion (ABF) for dependent opinions."""
     u_sum = a.uncertainty + b.uncertainty
 
-    if u_sum < 1e-15:
+    if u_sum < EPSILON_DEGENERATE:
         # Both dogmatic: fall through to cumulative dogmatic formula
         return cumulative_fusion(a, b)
 
@@ -104,7 +112,7 @@ def averaging_fusion(a: Opinion, b: Opinion) -> Opinion:
     uncertainty = (2 * a.uncertainty * b.uncertainty) / u_sum
     base_rate = (a.base_rate + b.base_rate) / 2
 
-    return _clamp_opinion(belief, disbelief, uncertainty, base_rate)
+    return normalize_opinion(belief, disbelief, uncertainty, base_rate, operation="averaging_fusion")
 
 
 def multi_source_averaging_fusion(opinions: list[Opinion]) -> Opinion:
@@ -142,7 +150,7 @@ def multi_source_averaging_fusion(opinions: list[Opinion]) -> Opinion:
 
     denom = sum(prod_excluding)
 
-    if denom < 1e-15:
+    if denom < EPSILON_DEGENERATE:
         # All dogmatic: use cumulative dogmatic formula iteratively
         result = opinions[0]
         for op in opinions[1:]:
@@ -154,4 +162,4 @@ def multi_source_averaging_fusion(opinions: list[Opinion]) -> Opinion:
     uncertainty = N * prod_all / denom
     base_rate = sum(op.base_rate for op in opinions) / N
 
-    return _clamp_opinion(belief, disbelief, uncertainty, base_rate)
+    return normalize_opinion(belief, disbelief, uncertainty, base_rate, operation="multi_source_averaging_fusion")

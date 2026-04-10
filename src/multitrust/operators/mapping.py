@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from multitrust.core.errors import InvalidOpinionError
 from multitrust.core.opinion import Opinion
+from multitrust.operators.constants import EPSILON_DOGMATIC
 
 
 def evidence_to_opinion(
@@ -19,7 +20,7 @@ def opinion_to_evidence(opinion: Opinion, W: float = 2.0) -> tuple[float, float]
 
     Raises InvalidOpinionError if uncertainty is approximately zero (dogmatic).
     """
-    if opinion.uncertainty < 1e-10:
+    if opinion.uncertainty < EPSILON_DOGMATIC:
         raise InvalidOpinionError(
             "Cannot convert dogmatic opinion (uncertainty ≈ 0) to evidence counts"
         )
