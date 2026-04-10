@@ -84,6 +84,7 @@ def test_apply_decay():
     mgr = SyncTrustManager()
     try:
         import time
+
         high_trust = Opinion(0.8, 0.1, 0.1, 0.5)
         mgr.register_agent("agent-decay", initial_opinion=high_trust)
         record = mgr.get_agent("agent-decay")
@@ -118,6 +119,7 @@ def test_context_manager():
 
 def test_get_trust_unregistered_raises():
     from multitrust.core.errors import AgentNotFoundError
+
     mgr = SyncTrustManager()
     try:
         with pytest.raises(AgentNotFoundError):

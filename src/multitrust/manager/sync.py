@@ -66,9 +66,7 @@ class SyncTrustManager:
     def rank_agents(self, agent_ids: list[str] | None = None) -> list[tuple[str, float]]:
         return self._run(self._manager.rank_agents(agent_ids))
 
-    def register_authority(
-        self, authority_id: str, *, is_trusted: bool = False
-    ) -> TrustRecord:
+    def register_authority(self, authority_id: str, *, is_trusted: bool = False) -> TrustRecord:
         return self._run(self._manager.register_authority(authority_id, is_trusted=is_trusted))
 
     def deregister_agent(self, agent_id: str) -> bool:
@@ -82,9 +80,7 @@ class SyncTrustManager:
         agent_id: str,
         authority_opinions: list[tuple[Opinion, Opinion]],
     ) -> TrustRecord:
-        return self._run(
-            self._manager.merge_authority_opinions(agent_id, authority_opinions)
-        )
+        return self._run(self._manager.merge_authority_opinions(agent_id, authority_opinions))
 
     def submit_discounted_opinion(
         self,

@@ -29,6 +29,7 @@ async def test_custom_fusion_fn_is_called():
     def my_fusion(a: Opinion, b: Opinion) -> Opinion:
         calls.append((a, b))
         from multitrust.operators.fusion import cumulative_fusion
+
         return cumulative_fusion(a, b)
 
     manager = TrustManager(fusion_fn=my_fusion)
@@ -46,6 +47,7 @@ async def test_custom_discount_fn_is_called():
     def my_discount(auth_op: Opinion, agent_op: Opinion) -> Opinion:
         calls.append((auth_op, agent_op))
         from multitrust.operators.discount import discount_opinion
+
         return discount_opinion(auth_op, agent_op)
 
     manager = TrustManager(discount_fn=my_discount)

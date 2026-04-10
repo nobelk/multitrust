@@ -38,6 +38,7 @@ class AlwaysNegativeRule:
 
 # --- RuleEngine tests ---
 
+
 def test_rule_engine_empty_returns_empty():
     engine = RuleEngine()
     results = engine.evaluate({})
@@ -106,6 +107,7 @@ def test_rule_engine_preserves_order():
 
 
 # --- EvidenceRule protocol tests ---
+
 
 def test_evidence_rule_protocol_check():
     rule = AlwaysPositiveRule()

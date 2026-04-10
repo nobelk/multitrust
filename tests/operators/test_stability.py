@@ -47,6 +47,7 @@ def test_mapping_uses_shared_epsilon():
     # An opinion whose uncertainty is exactly 0 should raise.
     dogmatic = Opinion(1.0, 0.0, 0.0, 0.5)
     from multitrust.core.errors import InvalidOpinionError
+
     with pytest.raises(InvalidOpinionError):
         opinion_to_evidence(dogmatic)
 
@@ -57,7 +58,7 @@ def test_mapping_uses_shared_epsilon():
 def test_discount_negative_clamp():
     """discount_opinion never produces negative components."""
     # Extreme authority trust = 1 with extreme source; uncertainty could underflow.
-    authority = Opinion(1.0, 0.0, 0.0, 0.5)   # fully dogmatic trust
+    authority = Opinion(1.0, 0.0, 0.0, 0.5)  # fully dogmatic trust
     source = Opinion(0.9, 0.1, 0.0, 0.7)
     result = discount_opinion(authority, source)
     assert result.belief >= 0.0

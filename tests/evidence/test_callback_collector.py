@@ -60,9 +60,7 @@ async def test_filters_none_results() -> None:
     async def cb_none(agent_id: str, context: dict) -> None:
         return None
 
-    collector = CallbackCollector(
-        authority_id="auth-1", callbacks={"good": cb_ok, "bad": cb_none}
-    )
+    collector = CallbackCollector(authority_id="auth-1", callbacks={"good": cb_ok, "bad": cb_none})
     evidences = await collector.collect("agent-1", {})
     assert len(evidences) == 1
     assert evidences[0].rule_name == "good"

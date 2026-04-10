@@ -159,6 +159,7 @@ async def test_thread_safe_concurrent_submissions():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
+
             async def run():
                 for _i in range(evidences_per_thread):
                     ev = Evidence(
@@ -168,6 +169,7 @@ async def test_thread_safe_concurrent_submissions():
                         negative=0.0,
                     )
                     await manager.submit_evidence(ev)
+
             loop.run_until_complete(run())
         except Exception as e:
             errors.append(e)

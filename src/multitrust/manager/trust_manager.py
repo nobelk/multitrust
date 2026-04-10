@@ -88,11 +88,13 @@ class TrustManager:
                     metadata=dict(kwargs),
                 )
                 await self._store.put(record)
-                await self._emit(AgentRegisteredEvent(
-                    event_type="agent_registered",
-                    agent_id=agent_id,
-                    initial_trust=record.trustworthiness,
-                ))
+                await self._emit(
+                    AgentRegisteredEvent(
+                        event_type="agent_registered",
+                        agent_id=agent_id,
+                        initial_trust=record.trustworthiness,
+                    )
+                )
                 return record
 
     async def get_agent(self, agent_id: str) -> TrustRecord | None:
@@ -133,33 +135,41 @@ class TrustManager:
                 if self._on_trust_updated is not None:
                     self._on_trust_updated(record)
 
-                await self._emit(EvidenceSubmittedEvent(
-                    event_type="evidence_submitted",
-                    agent_id=evidence.agent_id,
-                    positive=evidence.positive,
-                    negative=evidence.negative,
-                ))
-                await self._emit(TrustUpdatedEvent(
-                    event_type="trust_updated",
-                    agent_id=evidence.agent_id,
-                    old_trust=old_trust,
-                    new_trust=record.trustworthiness,
-                ))
+                await self._emit(
+                    EvidenceSubmittedEvent(
+                        event_type="evidence_submitted",
+                        agent_id=evidence.agent_id,
+                        positive=evidence.positive,
+                        negative=evidence.negative,
+                    )
+                )
+                await self._emit(
+                    TrustUpdatedEvent(
+                        event_type="trust_updated",
+                        agent_id=evidence.agent_id,
+                        old_trust=old_trust,
+                        new_trust=record.trustworthiness,
+                    )
+                )
                 threshold = self._config.trust_threshold
                 if old_trust < threshold <= record.trustworthiness:
-                    await self._emit(TrustThresholdCrossedEvent(
-                        event_type="trust_threshold_crossed",
-                        agent_id=evidence.agent_id,
-                        threshold=threshold,
-                        direction="above",
-                    ))
+                    await self._emit(
+                        TrustThresholdCrossedEvent(
+                            event_type="trust_threshold_crossed",
+                            agent_id=evidence.agent_id,
+                            threshold=threshold,
+                            direction="above",
+                        )
+                    )
                 elif old_trust >= threshold > record.trustworthiness:
-                    await self._emit(TrustThresholdCrossedEvent(
-                        event_type="trust_threshold_crossed",
-                        agent_id=evidence.agent_id,
-                        threshold=threshold,
-                        direction="below",
-                    ))
+                    await self._emit(
+                        TrustThresholdCrossedEvent(
+                            event_type="trust_threshold_crossed",
+                            agent_id=evidence.agent_id,
+                            threshold=threshold,
+                            direction="below",
+                        )
+                    )
 
                 return record
 
@@ -204,12 +214,14 @@ class TrustManager:
                 if self._on_trust_updated is not None:
                     self._on_trust_updated(record)
 
-                await self._emit(TrustUpdatedEvent(
-                    event_type="trust_updated",
-                    agent_id=agent_id,
-                    old_trust=old_trust,
-                    new_trust=record.trustworthiness,
-                ))
+                await self._emit(
+                    TrustUpdatedEvent(
+                        event_type="trust_updated",
+                        agent_id=agent_id,
+                        old_trust=old_trust,
+                        new_trust=record.trustworthiness,
+                    )
+                )
 
                 return record
 
@@ -312,12 +324,14 @@ class TrustManager:
                     record.updated_at = now
                     await self._store.put(record)
                     count += 1
-                    await self._emit(TrustUpdatedEvent(
-                        event_type="trust_updated",
-                        agent_id=agent_id,
-                        old_trust=old_trust,
-                        new_trust=record.trustworthiness,
-                    ))
+                    await self._emit(
+                        TrustUpdatedEvent(
+                            event_type="trust_updated",
+                            agent_id=agent_id,
+                            old_trust=old_trust,
+                            new_trust=record.trustworthiness,
+                        )
+                    )
         return count
 
     async def evict_stale_agents(self, *, max_age_seconds: float | None = None) -> int:
