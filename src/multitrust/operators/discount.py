@@ -15,4 +15,6 @@ def discount_opinion(authority_opinion: Opinion, source_opinion: Opinion) -> Opi
     belief = trust * source_opinion.belief
     disbelief = trust * source_opinion.disbelief
     uncertainty = 1.0 - belief - disbelief
-    return normalize_opinion(belief, disbelief, uncertainty, source_opinion.base_rate, operation="discount")
+    return normalize_opinion(
+        belief, disbelief, uncertainty, source_opinion.base_rate, operation="discount"
+    )

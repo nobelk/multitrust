@@ -6,7 +6,7 @@ from multitrust.operators.constants import (
     EPSILON_DOGMATIC,
     EPSILON_ZERO_DENOM,
 )
-from multitrust.operators.mapping import evidence_to_opinion, opinion_to_evidence
+from multitrust.operators.mapping import opinion_to_evidence
 from multitrust.operators.normalize import normalize_opinion
 
 
@@ -38,29 +38,35 @@ def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
         disbelief = gamma_A * a.disbelief + gamma_B * b.disbelief
         uncertainty = 0.0
         base_rate = gamma_A * a.base_rate + gamma_B * b.base_rate
-        return normalize_opinion(belief, disbelief, uncertainty, base_rate, operation="cumulative_fusion[dogmatic]")
+        return normalize_opinion(
+            belief, disbelief, uncertainty, base_rate, operation="cumulative_fusion[dogmatic]"
+        )
 
     denom = u_A + u_B - u_A * u_B
 
     if denom < EPSILON_ZERO_DENOM:
         # Near-zero denominator: use gamma-weighted combination (same as dogmatic branch)
+        ev_A: tuple[float, float] | None
+        ev_B: tuple[float, float] | None
         try:
-            r_A, s_A = opinion_to_evidence(a)
+            ev_A = opinion_to_evidence(a)
         except Exception:
-            r_A, s_A = None, None
+            ev_A = None
         try:
-            r_B, s_B = opinion_to_evidence(b)
+            ev_B = opinion_to_evidence(b)
         except Exception:
-            r_B, s_B = None, None
+            ev_B = None
 
-        if r_A is not None and r_B is not None:
-            total = r_A + s_A + r_B + s_B
+        if ev_A is not None and ev_B is not None:
+            nz_r_A, nz_s_A = ev_A
+            nz_r_B, nz_s_B = ev_B
+            total = nz_r_A + nz_s_A + nz_r_B + nz_s_B
             if total < EPSILON_DEGENERATE:
                 gamma_A = 0.5
                 gamma_B = 0.5
             else:
-                gamma_A = (r_A + s_A) / total
-                gamma_B = (r_B + s_B) / total
+                gamma_A = (nz_r_A + nz_s_A) / total
+                gamma_B = (nz_r_B + nz_s_B) / total
         else:
             gamma_A = 0.5
             gamma_B = 0.5
@@ -68,7 +74,9 @@ def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
         belief = gamma_A * a.belief + gamma_B * b.belief
         disbelief = gamma_A * a.disbelief + gamma_B * b.disbelief
         base_rate = gamma_A * a.base_rate + gamma_B * b.base_rate
-        return normalize_opinion(belief, disbelief, 0.0, base_rate, operation="cumulative_fusion[near-zero-denom]")
+        return normalize_opinion(
+            belief, disbelief, 0.0, base_rate, operation="cumulative_fusion[near-zero-denom]"
+        )
 
     belief = (a.belief * u_B + b.belief * u_A) / denom
     disbelief = (a.disbelief * u_B + b.disbelief * u_A) / denom
@@ -86,7 +94,9 @@ def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
                 a.base_rate * u_B + b.base_rate * u_A - (a.base_rate + b.base_rate) * u_A * u_B
             ) / denom2
 
-    return normalize_opinion(belief, disbelief, uncertainty, base_rate, operation="cumulative_fusion")
+    return normalize_opinion(
+        belief, disbelief, uncertainty, base_rate, operation="cumulative_fusion"
+    )
 
 
 def multi_source_cumulative_fusion(opinions: list[Opinion]) -> Opinion:
@@ -112,7 +122,9 @@ def averaging_fusion(a: Opinion, b: Opinion) -> Opinion:
     uncertainty = (2 * a.uncertainty * b.uncertainty) / u_sum
     base_rate = (a.base_rate + b.base_rate) / 2
 
-    return normalize_opinion(belief, disbelief, uncertainty, base_rate, operation="averaging_fusion")
+    return normalize_opinion(
+        belief, disbelief, uncertainty, base_rate, operation="averaging_fusion"
+    )
 
 
 def multi_source_averaging_fusion(opinions: list[Opinion]) -> Opinion:
@@ -162,4 +174,6 @@ def multi_source_averaging_fusion(opinions: list[Opinion]) -> Opinion:
     uncertainty = N * prod_all / denom
     base_rate = sum(op.base_rate for op in opinions) / N
 
-    return normalize_opinion(belief, disbelief, uncertainty, base_rate, operation="multi_source_averaging_fusion")
+    return normalize_opinion(
+        belief, disbelief, uncertainty, base_rate, operation="multi_source_averaging_fusion"
+    )

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from multitrust.core.evidence import EvidenceResult
 
 
@@ -11,7 +13,7 @@ class LatencyRule:
     def __init__(self, threshold_ms: float = 1000.0) -> None:
         self.threshold_ms = threshold_ms
 
-    def evaluate(self, context: dict) -> EvidenceResult | None:
+    def evaluate(self, context: dict[str, Any]) -> EvidenceResult | None:
         latency = context.get("latency_ms")
         if latency is None:
             return None

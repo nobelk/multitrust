@@ -37,7 +37,7 @@ class MetricsCollector:
 
     def __init__(self) -> None:
         try:
-            import prometheus_client as prom  # type: ignore[import-untyped]
+            import prometheus_client as prom  # type: ignore[import-not-found]
 
             self._evidence_counter = prom.Counter(
                 "multitrust_evidence_submitted_total",
@@ -55,9 +55,9 @@ class MetricsCollector:
             )
             self._prometheus_available = True
         except ImportError:
-            self._evidence_counter: Any = _NoOpCounter()
-            self._trust_gauge: Any = _NoOpGauge()
-            self._agent_count: Any = _NoOpGauge()
+            self._evidence_counter: Any = _NoOpCounter()  # type: ignore[no-redef]
+            self._trust_gauge: Any = _NoOpGauge()  # type: ignore[no-redef]
+            self._agent_count: Any = _NoOpGauge()  # type: ignore[no-redef]
             self._prometheus_available = False
 
     def record_evidence_submitted(self, agent_id: str) -> None:

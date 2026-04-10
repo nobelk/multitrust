@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from multitrust.core.evidence import EvidenceResult
 
 
@@ -8,7 +10,7 @@ class ResponseQualityRule:
 
     name: str = "response_quality"
 
-    def evaluate(self, context: dict) -> EvidenceResult | None:
+    def evaluate(self, context: dict[str, Any]) -> EvidenceResult | None:
         score = context.get("score", context.get("response_quality"))
         if score is None:
             return None

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from multitrust.core.evidence import Evidence, EvidenceResult
 from multitrust.evidence.rules import EvidenceRule, RuleEngine
@@ -8,7 +8,7 @@ from multitrust.evidence.rules import EvidenceRule, RuleEngine
 
 @runtime_checkable
 class EvidenceCollector(Protocol):
-    async def collect(self, agent_id: str, context: dict) -> list[Evidence]: ...
+    async def collect(self, agent_id: str, context: dict[str, Any]) -> list[Evidence]: ...
 
 
 class RuleBasedCollector:
@@ -24,7 +24,7 @@ class RuleBasedCollector:
     def add_rule(self, rule: EvidenceRule) -> None:
         self._engine.add_rule(rule)
 
-    async def collect(self, agent_id: str, context: dict) -> list[Evidence]:
+    async def collect(self, agent_id: str, context: dict[str, Any]) -> list[Evidence]:
         import time
 
         results: list[EvidenceResult] = self._engine.evaluate(context)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from multitrust.core.evidence import EvidenceResult
 
 
@@ -11,7 +13,7 @@ class ConsensusRule:
     def __init__(self, threshold: float = 0.5) -> None:
         self.threshold = threshold
 
-    def evaluate(self, context: dict) -> EvidenceResult | None:
+    def evaluate(self, context: dict[str, Any]) -> EvidenceResult | None:
         ratio = context.get("agreement_ratio")
         if ratio is None:
             return None

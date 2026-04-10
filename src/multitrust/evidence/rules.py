@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from multitrust.core.evidence import EvidenceResult
 
@@ -9,7 +9,7 @@ from multitrust.core.evidence import EvidenceResult
 class EvidenceRule(Protocol):
     name: str
 
-    def evaluate(self, context: dict) -> EvidenceResult | None: ...
+    def evaluate(self, context: dict[str, Any]) -> EvidenceResult | None: ...
 
 
 class RuleEngine:
@@ -19,7 +19,7 @@ class RuleEngine:
     def add_rule(self, rule: EvidenceRule) -> None:
         self._rules.append(rule)
 
-    def evaluate(self, context: dict) -> list[EvidenceResult]:
+    def evaluate(self, context: dict[str, Any]) -> list[EvidenceResult]:
         results = []
         for rule in self._rules:
             result = rule.evaluate(context)

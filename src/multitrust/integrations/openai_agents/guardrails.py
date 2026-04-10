@@ -20,7 +20,7 @@ class TrustGuardrail:
     async def check(self) -> bool:
         """Return True if agent meets the minimum trust threshold."""
         trust = await self._manager.get_trust(self.agent_id)
-        return trust >= self.min_trust
+        return bool(trust >= self.min_trust)
 
     async def __call__(self, *args: Any, **kwargs: Any) -> bool:
         """Callable interface compatible with OpenAI Agents guardrail hooks."""

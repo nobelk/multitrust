@@ -26,7 +26,7 @@ class TrustBeforeAgentCallback:
     async def check(self) -> bool:
         """Return True if trust is at or above threshold."""
         trust = await self._manager.get_trust(self.agent_id)
-        return trust >= self.threshold
+        return bool(trust >= self.threshold)
 
     async def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """ADK before-agent callback interface."""

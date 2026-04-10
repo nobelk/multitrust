@@ -12,7 +12,7 @@ def get_logger(name: str = "multitrust") -> Any:
     Uses structlog if available, falls back to stdlib logging.
     """
     try:
-        import structlog  # type: ignore[import-untyped]
+        import structlog
 
         return structlog.get_logger(name)
     except ImportError:

@@ -26,7 +26,7 @@ class TrustPreMessageHook:
     async def check(self) -> bool:
         """Return True if agent trust meets the threshold."""
         trust = await self._manager.get_trust(self.agent_id)
-        return trust >= self.threshold
+        return bool(trust >= self.threshold)
 
     async def __call__(self, messages: Any, *args: Any, **kwargs: Any) -> Any:
         """Pre-message hook — raise if trust is insufficient."""

@@ -19,4 +19,6 @@ def time_decay(
     belief = opinion.belief * decay_factor
     disbelief = opinion.disbelief * decay_factor
     uncertainty = 1.0 - belief - disbelief
-    return normalize_opinion(belief, disbelief, uncertainty, opinion.base_rate, operation="time_decay")
+    return normalize_opinion(
+        belief, disbelief, uncertainty, opinion.base_rate, operation="time_decay"
+    )

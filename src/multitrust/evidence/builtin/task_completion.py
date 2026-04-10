@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from multitrust.core.evidence import EvidenceResult
 
 
@@ -8,7 +10,7 @@ class TaskCompletionRule:
 
     name: str = "task_completion"
 
-    def evaluate(self, context: dict) -> EvidenceResult | None:
+    def evaluate(self, context: dict[str, Any]) -> EvidenceResult | None:
         success = context.get("success")
         if success is None:
             return None

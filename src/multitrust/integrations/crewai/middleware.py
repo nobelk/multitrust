@@ -29,7 +29,7 @@ class TrustMiddleware:
         ]
         if not candidates:
             return None
-        return candidates[0][0]
+        return str(candidates[0][0])
 
     async def filter_trusted(self, agent_ids: list[str]) -> list[str]:
         """Return agent_ids filtered to those meeting min_trust threshold."""
