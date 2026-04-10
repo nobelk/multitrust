@@ -22,3 +22,17 @@ def time_decay(
     return normalize_opinion(
         belief, disbelief, uncertainty, opinion.base_rate, operation="time_decay"
     )
+
+
+def evidence_decay(
+    positive: float,
+    negative: float,
+    elapsed_seconds: float,
+    half_life_seconds: float,
+) -> tuple[float, float]:
+    """Apply exponential time decay to raw evidence counts."""
+    if half_life_seconds <= 0:
+        return (positive, negative)
+    elapsed_seconds = max(0.0, elapsed_seconds)
+    lam = 2.0 ** (-elapsed_seconds / half_life_seconds)
+    return (max(0.0, lam * positive), max(0.0, lam * negative))

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from multitrust.core.types import TrustLevel
 from multitrust.manager.policy import DecisionPolicy, ThresholdPolicy, TrustPolicy
 
@@ -84,7 +82,6 @@ class TestDecisionPolicy:
 
 
 class TestThresholdPolicy:
-    @pytest.mark.anyio
     async def test_threshold_policy_check_allows(self):
         class FakeManager:
             async def get_trust(self, agent_id: str) -> float:
@@ -94,7 +91,6 @@ class TestThresholdPolicy:
         result = await policy.check(FakeManager(), "agent-1")
         assert result is True
 
-    @pytest.mark.anyio
     async def test_threshold_policy_check_denies(self):
         class FakeManager:
             async def get_trust(self, agent_id: str) -> float:
@@ -104,7 +100,6 @@ class TestThresholdPolicy:
         result = await policy.check(FakeManager(), "agent-1")
         assert result is False
 
-    @pytest.mark.anyio
     async def test_threshold_policy_check_exact_boundary(self):
         class FakeManager:
             async def get_trust(self, agent_id: str) -> float:
@@ -193,7 +188,6 @@ class TestDecisionPolicyEdgeCases:
 
 
 class TestThresholdPolicyEdgeCases:
-    @pytest.mark.anyio
     async def test_threshold_policy_zero_threshold(self):
         class FakeManager:
             async def get_trust(self, agent_id: str) -> float:
@@ -204,7 +198,6 @@ class TestThresholdPolicyEdgeCases:
         result = await policy.check(FakeManager(), "agent-1")
         assert result is True
 
-    @pytest.mark.anyio
     async def test_threshold_policy_high_threshold(self):
         class FakeManager:
             async def get_trust(self, agent_id: str) -> float:
@@ -215,7 +208,6 @@ class TestThresholdPolicyEdgeCases:
         result = await policy.check(FakeManager(), "agent-1")
         assert result is False
 
-    @pytest.mark.anyio
     async def test_threshold_policy_different_agents(self):
         received_ids: list[str] = []
 

@@ -4,7 +4,7 @@ from multitrust.operators.constants import (
     EPSILON_DRIFT_WARN,
     EPSILON_ZERO_DENOM,
 )
-from multitrust.operators.decay import time_decay
+from multitrust.operators.decay import evidence_decay, time_decay
 from multitrust.operators.discount import discount_opinion
 from multitrust.operators.fusion import (
     averaging_fusion,
@@ -29,6 +29,7 @@ __all__ = [
     "beta_to_opinion",
     "cumulative_fusion",
     "discount_opinion",
+    "evidence_decay",
     "evidence_to_opinion",
     "multi_source_averaging_fusion",
     "multi_source_cumulative_fusion",

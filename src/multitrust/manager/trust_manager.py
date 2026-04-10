@@ -11,6 +11,14 @@ from multitrust.core.errors import AgentNotFoundError
 from multitrust.core.evidence import Evidence
 from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
+from multitrust.observability.events import (
+    AgentRegisteredEvent,
+    EventBus,
+    EvidenceSubmittedEvent,
+    TrustEvent,
+    TrustThresholdCrossedEvent,
+    TrustUpdatedEvent,
+)
 from multitrust.operators.decay import time_decay
 from multitrust.operators.discount import discount_opinion
 from multitrust.operators.fusion import cumulative_fusion, multi_source_averaging_fusion
@@ -29,6 +37,9 @@ class TrustManager:
         on_trust_updated: Callable[[TrustRecord], None] | None = None,
         on_evidence_submitted: Callable[[Evidence], None] | None = None,
         thread_safe: bool = False,
+        fusion_fn: Callable[[Opinion, Opinion], Opinion] | None = None,
+        discount_fn: Callable[[Opinion, Opinion], Opinion] | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._store = store if store is not None else InMemoryTrustStore()
         self._config = config if config is not None else MultiTrustConfig()
@@ -36,6 +47,9 @@ class TrustManager:
         self._on_evidence_submitted = on_evidence_submitted
         self._asyncio_lock = asyncio.Lock()
         self._thread_lock: threading.Lock | None = threading.Lock() if thread_safe else None
+        self._fusion_fn = fusion_fn if fusion_fn is not None else cumulative_fusion
+        self._discount_fn = discount_fn if discount_fn is not None else discount_opinion
+        self._event_bus = event_bus
 
     @contextlib.contextmanager
     def _acquire_thread_lock(self) -> Iterator[None]:
@@ -45,6 +59,11 @@ class TrustManager:
                 yield
         else:
             yield
+
+    async def _emit(self, event: TrustEvent) -> None:
+        """Emit an event if an event bus is configured."""
+        if self._event_bus is not None:
+            await self._event_bus.emit(event)
 
     async def register_agent(
         self,
@@ -69,6 +88,11 @@ class TrustManager:
                     metadata=dict(kwargs),
                 )
                 await self._store.put(record)
+                await self._emit(AgentRegisteredEvent(
+                    event_type="agent_registered",
+                    agent_id=agent_id,
+                    initial_trust=record.trustworthiness,
+                ))
                 return record
 
     async def get_agent(self, agent_id: str) -> TrustRecord | None:
@@ -86,6 +110,8 @@ class TrustManager:
                     opinion = Opinion.vacuous(base_rate=self._config.default_base_rate)
                     record = TrustRecord(agent_id=evidence.agent_id, opinion=opinion)
 
+                old_trust = record.trustworthiness
+
                 # Convert evidence to opinion
                 new_opinion = evidence_to_opinion(
                     evidence.positive,
@@ -94,7 +120,7 @@ class TrustManager:
                     base_rate=self._config.default_base_rate,
                 )
                 # Fuse with existing opinion
-                fused = cumulative_fusion(record.opinion, new_opinion)
+                fused = self._fusion_fn(record.opinion, new_opinion)
 
                 record.opinion = fused
                 record.evidence_count += 1
@@ -106,6 +132,34 @@ class TrustManager:
 
                 if self._on_trust_updated is not None:
                     self._on_trust_updated(record)
+
+                await self._emit(EvidenceSubmittedEvent(
+                    event_type="evidence_submitted",
+                    agent_id=evidence.agent_id,
+                    positive=evidence.positive,
+                    negative=evidence.negative,
+                ))
+                await self._emit(TrustUpdatedEvent(
+                    event_type="trust_updated",
+                    agent_id=evidence.agent_id,
+                    old_trust=old_trust,
+                    new_trust=record.trustworthiness,
+                ))
+                threshold = self._config.trust_threshold
+                if old_trust < threshold <= record.trustworthiness:
+                    await self._emit(TrustThresholdCrossedEvent(
+                        event_type="trust_threshold_crossed",
+                        agent_id=evidence.agent_id,
+                        threshold=threshold,
+                        direction="above",
+                    ))
+                elif old_trust >= threshold > record.trustworthiness:
+                    await self._emit(TrustThresholdCrossedEvent(
+                        event_type="trust_threshold_crossed",
+                        agent_id=evidence.agent_id,
+                        threshold=threshold,
+                        direction="below",
+                    ))
 
                 return record
 
@@ -133,19 +187,28 @@ class TrustManager:
                     opinion = Opinion.vacuous(base_rate=self._config.default_base_rate)
                     record = TrustRecord(agent_id=agent_id, opinion=opinion)
 
+                old_trust = record.trustworthiness
+
                 discounted_opinions = [
-                    discount_opinion(auth_op, agent_op) for auth_op, agent_op in authority_opinions
+                    self._discount_fn(auth_op, agent_op) for auth_op, agent_op in authority_opinions
                 ]
 
                 if discounted_opinions:
                     merged = multi_source_averaging_fusion(discounted_opinions)
-                    fused = cumulative_fusion(record.opinion, merged)
+                    fused = self._fusion_fn(record.opinion, merged)
                     record.opinion = fused
                     record.updated_at = time.time()
                     await self._store.put(record)
 
                 if self._on_trust_updated is not None:
                     self._on_trust_updated(record)
+
+                await self._emit(TrustUpdatedEvent(
+                    event_type="trust_updated",
+                    agent_id=agent_id,
+                    old_trust=old_trust,
+                    new_trust=record.trustworthiness,
+                ))
 
                 return record
 
@@ -168,7 +231,7 @@ class TrustManager:
                     opinion = Opinion.vacuous(base_rate=self._config.default_base_rate)
                     record = TrustRecord(agent_id=agent_id, opinion=opinion)
 
-                fused = cumulative_fusion(record.opinion, discounted_opinion)
+                fused = self._fusion_fn(record.opinion, discounted_opinion)
                 record.opinion = fused
                 record.evidence_count += 1
                 record.positive_total += positive
@@ -241,13 +304,37 @@ class TrustManager:
                     record = await self._store.get(agent_id)
                     if record is None:
                         continue
+                    old_trust = record.trustworthiness
                     elapsed = now - record.updated_at
                     decayed = time_decay(record.opinion, elapsed, hl)
                     record.opinion = decayed
                     record.updated_at = now
                     await self._store.put(record)
                     count += 1
+                    await self._emit(TrustUpdatedEvent(
+                        event_type="trust_updated",
+                        agent_id=agent_id,
+                        old_trust=old_trust,
+                        new_trust=record.trustworthiness,
+                    ))
         return count
+
+    async def evict_stale_agents(self, *, max_age_seconds: float | None = None) -> int:
+        """Remove agents not updated within max_age_seconds. Return count evicted."""
+        max_age = max_age_seconds if max_age_seconds is not None else self._config.max_stale_age_seconds
+        agent_ids = await self._store.list_agents()
+        now = time.time()
+        evicted = 0
+        for agent_id in agent_ids:
+            with self._acquire_thread_lock():
+                async with self._asyncio_lock:
+                    record = await self._store.get(agent_id)
+                    if record is None:
+                        continue
+                    if now - record.updated_at > max_age:
+                        await self._store.delete(agent_id)
+                        evicted += 1
+        return evicted
 
     async def __aenter__(self) -> TrustManager:
         return self

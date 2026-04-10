@@ -14,21 +14,23 @@ from multitrust.core.evidence import Evidence, EvidenceResult
 from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
 from multitrust.core.types import AgentId, AuthorityId, TrustLevel
-from multitrust.evidence.collector import EvidenceCollector, RuleBasedCollector
+from multitrust.evidence.collector import CallbackCollector, EvidenceCollector, RuleBasedCollector
 from multitrust.evidence.rules import EvidenceRule, RuleEngine
 from multitrust.integrations.generic.context import TrustContext
 from multitrust.integrations.generic.decorators import collect_evidence, trust_aware
 from multitrust.manager.policy import DecisionPolicy, ThresholdPolicy, TrustPolicy
 from multitrust.manager.trust_authority import DistributedAuthority, TrustAuthority
+from multitrust.manager.sync import SyncTrustManager
 from multitrust.manager.trust_manager import TrustManager
 from multitrust.observability.events import (
     AgentRegisteredEvent,
     EventBus,
     EvidenceSubmittedEvent,
     TrustEvent,
+    TrustThresholdCrossedEvent,
     TrustUpdatedEvent,
 )
-from multitrust.operators.decay import time_decay
+from multitrust.operators.decay import evidence_decay, time_decay
 from multitrust.operators.discount import discount_opinion
 from multitrust.operators.fusion import (
     averaging_fusion,
@@ -64,6 +66,7 @@ __all__ = [
     "StoreError",
     "AuthorityNotFoundError",
     # Operators
+    "evidence_decay",
     "cumulative_fusion",
     "averaging_fusion",
     "multi_source_averaging_fusion",
@@ -75,6 +78,7 @@ __all__ = [
     "opinion_to_beta_parameters",
     "beta_to_opinion",
     # Manager
+    "SyncTrustManager",
     "TrustManager",
     "TrustAuthority",
     "DistributedAuthority",
@@ -85,6 +89,7 @@ __all__ = [
     "TrustStore",
     "InMemoryTrustStore",
     # Evidence
+    "CallbackCollector",
     "EvidenceCollector",
     "RuleBasedCollector",
     "EvidenceRule",
@@ -99,4 +104,5 @@ __all__ = [
     "TrustUpdatedEvent",
     "EvidenceSubmittedEvent",
     "AgentRegisteredEvent",
+    "TrustThresholdCrossedEvent",
 ]
