@@ -37,5 +37,4 @@ class InMemoryTrustStore:
             return agent_id in self._store
 
     async def close(self) -> None:
-        async with self._lock:
-            self._store.clear()
+        pass

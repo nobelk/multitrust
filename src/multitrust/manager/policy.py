@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from multitrust.core.types import TrustLevel
+
+if TYPE_CHECKING:
+    from multitrust.manager.trust_manager import TrustManager
 
 
 class TrustPolicy:
@@ -14,8 +19,8 @@ class TrustPolicy:
 
     def classify(self, trust_score: float) -> TrustLevel:
         best = TrustLevel.UNTRUSTED
-        for level in sorted(TrustLevel, key=lambda lv: lv.value):
-            if trust_score >= level.value:
+        for level in sorted(TrustLevel, key=lambda lv: self._thresholds[lv]):
+            if trust_score >= self._thresholds[level]:
                 best = level
         return best
 
@@ -36,6 +41,6 @@ class ThresholdPolicy:
     def __init__(self, threshold: float) -> None:
         self._threshold = threshold
 
-    async def check(self, manager: object, agent_id: str) -> bool:
+    async def check(self, manager: TrustManager, agent_id: str) -> bool:
         trust = await manager.get_trust(agent_id)  # type: ignore[union-attr]
         return trust >= self._threshold

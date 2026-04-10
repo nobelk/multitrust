@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from multitrust.core.evidence import Evidence
 from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
 from multitrust.operators.discount import discount_opinion
+from multitrust.operators.mapping import evidence_to_opinion
+
+if TYPE_CHECKING:
+    from multitrust.manager.trust_manager import TrustManager
 
 
 class TrustAuthority:
     """An authority that can observe agent behaviour and submit evidence."""
 
-    def __init__(self, authority_id: str, manager: object) -> None:
+    def __init__(self, authority_id: str, manager: TrustManager) -> None:
         self.authority_id = authority_id
         self._manager = manager
 
@@ -27,10 +33,10 @@ class TrustAuthority:
             negative=negative,
             metadata={k: v for k, v in kwargs.items()},
         )
-        return await self._manager.submit_evidence(evidence)  # type: ignore[union-attr]
+        return await self._manager.submit_evidence(evidence)
 
     async def get_opinion(self, agent_id: str) -> Opinion | None:
-        record = await self._manager.get_agent(agent_id)  # type: ignore[union-attr]
+        record = await self._manager.get_agent(agent_id)
         if record is None:
             return None
         return record.opinion
@@ -47,28 +53,21 @@ class DistributedAuthority(TrustAuthority):
         **kwargs: object,
     ) -> TrustRecord:
         # Get this authority's own trust record to use as discounting factor
-        authority_record = await self._manager.get_agent(self.authority_id)  # type: ignore[union-attr]
+        authority_record = await self._manager.get_agent(self.authority_id)
         if authority_record is not None:
             authority_opinion = authority_record.opinion
-            # Build raw opinion from evidence
-            from multitrust.operators.mapping import evidence_to_opinion
-
-            raw_opinion = evidence_to_opinion(positive, negative)
+            # Build raw opinion from evidence using manager-configured prior_weight and base_rate
+            raw_opinion = evidence_to_opinion(
+                positive,
+                negative,
+                W=self._manager._config.default_prior_weight,
+                base_rate=self._manager._config.default_base_rate,
+            )
             # Discount by authority's trustworthiness
             discounted = discount_opinion(authority_opinion, raw_opinion)
-            # Submit as pre-computed evidence equivalent: use discounted belief/disbelief
-            # We submit as a direct opinion merge instead of raw evidence
-            import time
-
-            record = await self._manager.get_agent(agent_id)  # type: ignore[union-attr]
-            if record is None:
-                record = await self._manager.register_agent(agent_id)
-            from multitrust.operators.fusion import cumulative_fusion
-
-            new_opinion = cumulative_fusion(record.opinion, discounted)
-            record.opinion = new_opinion
-            record.updated_at = time.time()
-            await self._manager._store.put(record)  # type: ignore[union-attr]
-            return record
+            # Submit via manager API to ensure proper bookkeeping and callbacks
+            return await self._manager.submit_discounted_opinion(
+                agent_id, discounted, positive, negative
+            )
         # Fallback: behave like a normal authority
         return await super().observe(agent_id, positive=positive, negative=negative, **kwargs)

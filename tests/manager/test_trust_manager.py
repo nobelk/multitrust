@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import threading
 import pytest
 
 from multitrust.core.errors import AgentNotFoundError
@@ -140,3 +142,47 @@ async def test_merge_authority_opinions():
     assert record.agent_id == "target-agent"
     # Trust should have increased from vacuous baseline
     assert record.trustworthiness > Opinion.vacuous().trustworthiness
+
+
+@pytest.mark.asyncio
+async def test_thread_safe_concurrent_submissions():
+    """BUG-1: thread_safe=True should protect against concurrent multi-thread access."""
+    manager = TrustManager(thread_safe=True)
+    await manager.register_agent("shared-agent")
+
+    errors = []
+    num_threads = 8
+    evidences_per_thread = 5
+
+    def submit_from_thread():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            async def run():
+                for i in range(evidences_per_thread):
+                    ev = Evidence(
+                        agent_id="shared-agent",
+                        authority_id=f"auth-{threading.current_thread().name}",
+                        positive=1.0,
+                        negative=0.0,
+                    )
+                    await manager.submit_evidence(ev)
+            loop.run_until_complete(run())
+        except Exception as e:
+            errors.append(e)
+        finally:
+            loop.close()
+
+    threads = [threading.Thread(target=submit_from_thread) for _ in range(num_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == [], f"Concurrent submission errors: {errors}"
+
+    record = await manager.get_agent("shared-agent")
+    assert record is not None
+    # All submissions should have been counted
+    assert record.evidence_count == num_threads * evidences_per_thread
+    assert record.positive_total == float(num_threads * evidences_per_thread)
