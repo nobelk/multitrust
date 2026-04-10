@@ -42,5 +42,5 @@ class ThresholdPolicy:
         self._threshold = threshold
 
     async def check(self, manager: TrustManager, agent_id: str) -> bool:
-        trust = await manager.get_trust(agent_id)  # type: ignore[union-attr]
+        trust = await manager.get_trust(agent_id)
         return trust >= self._threshold

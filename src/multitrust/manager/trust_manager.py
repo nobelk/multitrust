@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 from multitrust.config.settings import MultiTrustConfig
 from multitrust.core.errors import AgentNotFoundError
@@ -15,6 +15,7 @@ from multitrust.operators.decay import time_decay
 from multitrust.operators.discount import discount_opinion
 from multitrust.operators.fusion import cumulative_fusion, multi_source_averaging_fusion
 from multitrust.operators.mapping import evidence_to_opinion
+from multitrust.storage.base import TrustStore
 from multitrust.storage.memory import InMemoryTrustStore
 
 
@@ -23,7 +24,7 @@ class TrustManager:
 
     def __init__(
         self,
-        store: object | None = None,
+        store: TrustStore | None = None,
         config: MultiTrustConfig | None = None,
         on_trust_updated: Callable[[TrustRecord], None] | None = None,
         on_evidence_submitted: Callable[[Evidence], None] | None = None,
@@ -37,7 +38,7 @@ class TrustManager:
         self._thread_lock: threading.Lock | None = threading.Lock() if thread_safe else None
 
     @contextlib.contextmanager
-    def _acquire_thread_lock(self):
+    def _acquire_thread_lock(self) -> Iterator[None]:
         """Acquire the thread lock if thread_safe=True, otherwise no-op."""
         if self._thread_lock is not None:
             with self._thread_lock:
