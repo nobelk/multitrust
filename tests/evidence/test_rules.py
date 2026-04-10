@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from multitrust.core.evidence import EvidenceResult
 from multitrust.evidence.rules import EvidenceRule, RuleEngine
 
@@ -25,7 +23,9 @@ class ContextEchoRule:
 
     def evaluate(self, context: dict) -> EvidenceResult | None:
         if "score" in context:
-            return EvidenceResult(positive=context["score"], negative=0.0, metadata={"source": "echo"})
+            return EvidenceResult(
+                positive=context["score"], negative=0.0, metadata={"source": "echo"}
+            )
         return None
 
 

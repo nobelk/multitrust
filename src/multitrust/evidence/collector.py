@@ -56,14 +56,18 @@ class CallbackCollector:
             dict(callbacks) if callbacks else {}
         )
 
-    def add_callback(self, name: str, callback: Callable[..., Awaitable[EvidenceResult | None]]) -> None:
+    def add_callback(
+        self, name: str, callback: Callable[..., Awaitable[EvidenceResult | None]]
+    ) -> None:
         self._callbacks[name] = callback
 
     async def collect(self, agent_id: str, context: dict[str, Any]) -> list[Evidence]:
         names = list(self._callbacks.keys())
-        raw_results = await asyncio.gather(*(cb(agent_id, context) for cb in self._callbacks.values()))
+        raw_results = await asyncio.gather(
+            *(cb(agent_id, context) for cb in self._callbacks.values())
+        )
         evidences = []
-        for name, result in zip(names, raw_results):
+        for name, result in zip(names, raw_results, strict=True):
             if result is None:
                 continue
             evidences.append(

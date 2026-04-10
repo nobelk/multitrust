@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
-from multitrust.core.evidence import Evidence, EvidenceResult
+from multitrust.core.evidence import EvidenceResult
 from multitrust.evidence.collector import EvidenceCollector, RuleBasedCollector
 
 

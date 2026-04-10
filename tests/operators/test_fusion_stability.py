@@ -49,9 +49,9 @@ def test_consistent_epsilon_usage():
     assert EPSILON_ZERO_DENOM <= EPSILON_DOGMATIC
 
     # Concrete value checks matching constants.py
-    assert EPSILON_DOGMATIC == pytest.approx(1e-10)
-    assert EPSILON_ZERO_DENOM == pytest.approx(1e-10)
-    assert EPSILON_DEGENERATE == pytest.approx(1e-15)
+    assert pytest.approx(1e-10) == EPSILON_DOGMATIC
+    assert pytest.approx(1e-10) == EPSILON_ZERO_DENOM
+    assert pytest.approx(1e-15) == EPSILON_DEGENERATE
 
 
 def test_normalize_logging_on_large_drift(caplog):

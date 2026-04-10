@@ -63,7 +63,7 @@ async def test_distributed_authority_discounts():
 
 @pytest.mark.asyncio
 async def test_distributed_authority_updates_evidence_counters():
-    """BUG-3: DistributedAuthority.observe() must update evidence_count, positive_total, negative_total."""
+    """BUG-3: DistributedAuthority.observe() must update evidence counters."""
     manager = TrustManager()
     authority_opinion = Opinion(0.6, 0.1, 0.3, 0.5)
     await manager.register_agent("dist-auth", initial_opinion=authority_opinion)
@@ -79,7 +79,7 @@ async def test_distributed_authority_updates_evidence_counters():
 
 @pytest.mark.asyncio
 async def test_distributed_authority_fires_callbacks():
-    """BUG-3: DistributedAuthority.observe() must fire on_trust_updated and on_evidence_submitted."""
+    """BUG-3: DistributedAuthority.observe() must fire callbacks."""
     trust_updates = []
     evidence_submissions = []
 
@@ -100,7 +100,7 @@ async def test_distributed_authority_fires_callbacks():
 
 @pytest.mark.asyncio
 async def test_distributed_authority_uses_config_prior_weight_and_base_rate():
-    """BUG-4: DistributedAuthority.observe() must use manager config's prior_weight and base_rate."""
+    """BUG-4: DistributedAuthority.observe() must use manager config."""
     from multitrust.config.settings import MultiTrustConfig
 
     config = MultiTrustConfig(default_prior_weight=5.0, default_base_rate=0.3)

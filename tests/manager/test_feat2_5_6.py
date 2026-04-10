@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from multitrust.config.settings import MultiTrustConfig
 from multitrust.core.evidence import Evidence
 from multitrust.core.opinion import Opinion
-from multitrust.core.trust_record import TrustRecord
 from multitrust.manager.trust_manager import TrustManager
 from multitrust.observability.events import (
     AgentRegisteredEvent,
@@ -17,7 +15,6 @@ from multitrust.observability.events import (
     TrustThresholdCrossedEvent,
     TrustUpdatedEvent,
 )
-
 
 # ---------------------------------------------------------------------------
 # FEAT-5: Custom fusion/discount injection

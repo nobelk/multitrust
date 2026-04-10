@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+
 import pytest
 
 from multitrust.core.errors import AgentNotFoundError
@@ -159,7 +160,7 @@ async def test_thread_safe_concurrent_submissions():
         asyncio.set_event_loop(loop)
         try:
             async def run():
-                for i in range(evidences_per_thread):
+                for _i in range(evidences_per_thread):
                     ev = Evidence(
                         agent_id="shared-agent",
                         authority_id=f"auth-{threading.current_thread().name}",

@@ -190,7 +190,8 @@ class TrustManager:
                 old_trust = record.trustworthiness
 
                 discounted_opinions = [
-                    self._discount_fn(auth_op, agent_op) for auth_op, agent_op in authority_opinions
+                    self._discount_fn(auth_op, agent_op)
+                    for auth_op, agent_op in authority_opinions
                 ]
 
                 if discounted_opinions:
@@ -321,7 +322,9 @@ class TrustManager:
 
     async def evict_stale_agents(self, *, max_age_seconds: float | None = None) -> int:
         """Remove agents not updated within max_age_seconds. Return count evicted."""
-        max_age = max_age_seconds if max_age_seconds is not None else self._config.max_stale_age_seconds
+        max_age = (
+            max_age_seconds if max_age_seconds is not None else self._config.max_stale_age_seconds
+        )
         agent_ids = await self._store.list_agents()
         now = time.time()
         evicted = 0
