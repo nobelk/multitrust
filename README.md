@@ -1,5 +1,9 @@
 # MultiTrust
 
+[![CI](https://github.com/nobelk/multitrust/actions/workflows/ci.yml/badge.svg)](https://github.com/nobelk/multitrust/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+
 A Trust Framework SDK for Multi-Agent Systems based on Subjective Logic.
 
 MultiTrust provides a principled, math-grounded approach to managing trust between AI agents. It models trust as a **subjective opinion** (belief, disbelief, uncertainty) rather than a raw score, enabling nuanced reasoning about agent reliability across complex multi-agent pipelines.
@@ -251,4 +255,4 @@ uv build
 
 ## License
 
-MIT
+Apache-2.0

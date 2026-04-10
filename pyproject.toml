@@ -3,6 +3,7 @@ name = "multitrust"
 version = "0.1.0"
 description = "A Trust Framework SDK for Multi-Agent Systems based on Subjective Logic"
 readme = "README.md"
+license = "Apache-2.0"
 authors = [
     { name = "Dr. Nobel Khandaker", email = "nobel@outlook.com" }
 ]
