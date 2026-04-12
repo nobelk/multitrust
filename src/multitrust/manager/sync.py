@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from typing import Any
+from collections.abc import Coroutine
+from typing import Any, TypeVar
 
 from multitrust.config.settings import MultiTrustConfig
 from multitrust.core.evidence import Evidence
@@ -12,6 +13,8 @@ from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
 from multitrust.manager.trust_manager import TrustManager
 from multitrust.storage.base import TrustStore
+
+_T = TypeVar("_T")
 
 
 class SyncTrustManager:
@@ -32,7 +35,7 @@ class SyncTrustManager:
         self._thread.start()
         self._manager = TrustManager(store=store, config=config, **kwargs)
 
-    def _run(self, coro):
+    def _run(self, coro: Coroutine[Any, Any, _T]) -> _T:
         """Schedule a coroutine on the background loop and block until complete."""
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result()
