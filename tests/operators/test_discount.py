@@ -1,9 +1,20 @@
 from __future__ import annotations
 
 import pytest
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 
 from multitrust.core.opinion import Opinion
 from multitrust.operators.discount import discount_opinion
+
+
+def valid_opinion_strategy():
+    """Generate valid opinions via hypothesis."""
+    return st.floats(min_value=0.0, max_value=1.0).flatmap(
+        lambda b: st.floats(min_value=0.0, max_value=1.0 - b).map(
+            lambda d: Opinion(b, d, 1.0 - b - d, 0.5)
+        )
+    )
 
 
 def test_basic_discount():
@@ -51,3 +62,12 @@ def test_base_rate_preserved():
     source = Opinion(0.5, 0.2, 0.3, 0.7)
     result = discount_opinion(authority, source)
     assert result.base_rate == pytest.approx(source.base_rate, abs=1e-9)
+
+
+@given(valid_opinion_strategy(), valid_opinion_strategy())
+@settings(max_examples=200)
+def test_discount_increases_uncertainty(authority: Opinion, source: Opinion):
+    """Discounting by non-full-trust authority always increases uncertainty."""
+    assume(authority.trustworthiness < 0.999999)
+    result = discount_opinion(authority, source)
+    assert result.uncertainty >= source.uncertainty - 1e-9

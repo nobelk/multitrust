@@ -47,6 +47,7 @@ from multitrust.operators.mapping import (
 )
 from multitrust.storage.base import TrustStore
 from multitrust.storage.memory import InMemoryTrustStore
+from multitrust.storage.sqlite import SQLiteTrustStore
 
 __all__ = [
     # Version
@@ -90,6 +91,7 @@ __all__ = [
     # Storage
     "TrustStore",
     "InMemoryTrustStore",
+    "SQLiteTrustStore",
     # Evidence
     "CallbackCollector",
     "EvidenceCollector",

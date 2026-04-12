@@ -19,6 +19,15 @@ pip install multitrust
 
 # With optional extras
 pip install "multitrust[langgraph,anthropic,logging,metrics]"
+
+# With SQLite-backed trust store
+pip install "multitrust[sqlite]"
+
+# With env-var config loading (pydantic-settings, optional — from_env() works without it)
+pip install "multitrust[config]"
+
+# Everything
+pip install "multitrust[full]"
 ```
 
 ## Quick Start
@@ -135,14 +144,80 @@ async with TrustContext(manager, "agent-1") as ctx:
 # Evidence submitted automatically on exit
 ```
 
+## Configuration
+
+### Programmatic
+
+```python
+from multitrust import MultiTrustConfig, TrustManager
+
+config = MultiTrustConfig(
+    enable_time_decay=True,
+    decay_half_life_seconds=3600.0,
+    trust_threshold=0.7,
+)
+async with TrustManager(config=config) as manager:
+    ...
+```
+
+### Environment Variables
+
+Copy `.env-sample` to `.env` and set any overrides. Then load with `from_env()`:
+
+```python
+from multitrust import MultiTrustConfig, TrustManager
+
+config = MultiTrustConfig.from_env()
+async with TrustManager(config=config) as manager:
+    ...
+```
+
+| Variable | Type | Default |
+|----------|------|---------|
+| `MULTITRUST_ENABLE_TIME_DECAY` | bool | `false` |
+| `MULTITRUST_DECAY_HALF_LIFE_SECONDS` | float | `86400.0` |
+| `MULTITRUST_DEFAULT_BASE_RATE` | float | `0.5` |
+| `MULTITRUST_DEFAULT_PRIOR_WEIGHT` | float | `2.0` |
+| `MULTITRUST_MIN_UNCERTAINTY` | float | `0.01` |
+| `MULTITRUST_TRUST_THRESHOLD` | float | `0.5` |
+| `MULTITRUST_THREAD_SAFE` | bool | `false` |
+| `MULTITRUST_MAX_STALE_AGE_SECONDS` | float | `604800.0` |
+
+Booleans accept `true`/`false`/`1`/`0` (case-insensitive). Unset variables fall back to defaults.
+
+## Storage Backends
+
+### In-Memory (default)
+
+```python
+from multitrust import TrustManager
+
+async with TrustManager() as manager:  # InMemoryTrustStore by default
+    ...
+```
+
+### SQLite (persistent)
+
+Requires the `sqlite` extra (`pip install "multitrust[sqlite]"`):
+
+```python
+from multitrust import TrustManager, SQLiteTrustStore
+
+store = SQLiteTrustStore("trust.db")
+async with TrustManager(store=store) as manager:
+    await manager.register_agent("agent-1")
+    # Data persists across restarts
+```
+
 ## Project Structure
 
 ```
 src/multitrust/
 ├── core/               # Core types: Opinion, Evidence, TrustRecord, errors
+├── config/             # MultiTrustConfig, defaults, env-var loading
 ├── operators/          # Fusion, discount, decay, mapping operators
 ├── manager/            # TrustManager, TrustAuthority, policies
-├── storage/            # TrustStore protocol, InMemoryTrustStore
+├── storage/            # TrustStore protocol, InMemoryTrustStore, SQLiteTrustStore
 ├── evidence/           # EvidenceCollector, RuleEngine
 ├── integrations/
 │   ├── generic/        # Decorators and TrustContext (no framework deps)
@@ -231,17 +306,20 @@ logger = get_logger("multitrust")
 ## Development
 
 ```bash
-# Setup
-uv sync --extra dev
+# Setup (install all dev and optional dependencies)
+uv sync --extra dev --extra full
 
 # Run tests
 uv run pytest
 
 # Run with coverage
-uv run pytest --cov=src/multitrust
+uv run pytest --cov=src/multitrust --cov-report=term-missing
 
 # Lint
 uv run ruff check src/ tests/
+
+# Auto-fix lint errors
+uv run ruff check --fix src/ tests/
 
 # Format
 uv run ruff format src/ tests/

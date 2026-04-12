@@ -172,3 +172,53 @@ def test_evidence_fusion_equivalence(r1: float, s1: float, r2: float, s2: float)
     assert fused.belief == pytest.approx(direct.belief, abs=1e-6)
     assert fused.disbelief == pytest.approx(direct.disbelief, abs=1e-6)
     assert fused.uncertainty == pytest.approx(direct.uncertainty, abs=1e-6)
+
+
+@given(valid_opinion_strategy(), valid_opinion_strategy())
+@settings(max_examples=200)
+def test_cumulative_uncertainty_monotonicity(a: Opinion, b: Opinion):
+    """CBF combined uncertainty <= min of inputs' uncertainties (non-dogmatic branch)."""
+    assume(a.uncertainty > 1e-6 or b.uncertainty > 1e-6)
+    result = cumulative_fusion(a, b)
+    assert result.uncertainty <= min(a.uncertainty, b.uncertainty) + 1e-9
+
+
+@given(valid_opinion_strategy(), valid_opinion_strategy())
+@settings(max_examples=200)
+def test_averaging_uncertainty_bound(a: Opinion, b: Opinion):
+    """ABF uncertainty is bounded by max of inputs' uncertainties."""
+    assume(a.uncertainty + b.uncertainty > 1e-9)
+    result = averaging_fusion(a, b)
+    assert result.uncertainty <= max(a.uncertainty, b.uncertainty) + 1e-9
+
+
+@given(
+    st.floats(min_value=0.0, max_value=1.0).flatmap(
+        lambda br: st.tuples(
+            st.floats(min_value=0.0, max_value=1.0).flatmap(
+                lambda b: st.floats(min_value=0.0, max_value=1.0 - b).map(
+                    lambda d: Opinion(b, d, 1.0 - b - d, br)
+                )
+            ),
+            st.floats(min_value=0.0, max_value=1.0).flatmap(
+                lambda b: st.floats(min_value=0.0, max_value=1.0 - b).map(
+                    lambda d: Opinion(b, d, 1.0 - b - d, br)
+                )
+            ),
+        )
+    )
+)
+@settings(max_examples=200)
+def test_averaging_projected_probability_convexity(ops: tuple[Opinion, Opinion]):
+    """Averaging fusion projected probability lies between inputs' projected probabilities."""
+    a, b = ops
+    assume(a.uncertainty + b.uncertainty > 1e-9)
+
+    def _projected(op: Opinion) -> float:
+        return op.belief + op.uncertainty * op.base_rate
+
+    pa = _projected(a)
+    pb = _projected(b)
+    result = averaging_fusion(a, b)
+    p_fused = _projected(result)
+    assert min(pa, pb) - 1e-6 <= p_fused <= max(pa, pb) + 1e-6
