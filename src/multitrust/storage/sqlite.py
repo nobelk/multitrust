@@ -77,7 +77,7 @@ class SQLiteTrustStore:
                 "DELETE FROM trust_records WHERE agent_id = ?", (agent_id,)
             )
             await conn.commit()
-            return cursor.rowcount > 0
+            return bool(cursor.rowcount > 0)
         except Exception as exc:
             raise StoreError(f"Failed to delete record for {agent_id!r}") from exc
 
