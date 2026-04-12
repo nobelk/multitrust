@@ -3,6 +3,7 @@
 Each test case is a concrete numerical fixture with hand-verifiable derivations.
 Reference: Cheng et al. 2021 AAMAS (p332.txt) and Supplementary.txt.
 """
+
 from __future__ import annotations
 
 import pytest

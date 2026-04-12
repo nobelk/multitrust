@@ -43,9 +43,7 @@ async def test_roundtrip_multiple_agents():
     for agent_id, pos, neg in agents:
         await mgr1.register_agent(agent_id)
         await mgr1.submit_evidence(
-            Evidence(
-                agent_id=agent_id, authority_id="auth", positive=pos, negative=neg
-            )
+            Evidence(agent_id=agent_id, authority_id="auth", positive=pos, negative=neg)
         )
 
     trusts_before = {aid: await mgr1.get_trust(aid) for aid, _, _ in agents}
@@ -63,9 +61,7 @@ async def test_roundtrip_survives_manager_close():
     async with TrustManager(store=store) as mgr:
         await mgr.register_agent("ctx-agent")
         await mgr.submit_evidence(
-            Evidence(
-                agent_id="ctx-agent", authority_id="auth", positive=5.0, negative=0.0
-            )
+            Evidence(agent_id="ctx-agent", authority_id="auth", positive=5.0, negative=0.0)
         )
         trust_before = await mgr.get_trust("ctx-agent")
 

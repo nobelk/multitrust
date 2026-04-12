@@ -53,28 +53,26 @@ class MultiTrustConfig:
         raw_max_stale_age = os.environ.get("MULTITRUST_MAX_STALE_AGE_SECONDS")
 
         decay_half_life = (
-            float(raw_decay_half_life) if raw_decay_half_life is not None
+            float(raw_decay_half_life)
+            if raw_decay_half_life is not None
             else DEFAULT_DECAY_HALF_LIFE
         )
-        base_rate = (
-            float(raw_base_rate) if raw_base_rate is not None
-            else DEFAULT_BASE_RATE
-        )
+        base_rate = float(raw_base_rate) if raw_base_rate is not None else DEFAULT_BASE_RATE
         prior_weight = (
-            float(raw_prior_weight) if raw_prior_weight is not None
-            else DEFAULT_PRIOR_WEIGHT
+            float(raw_prior_weight) if raw_prior_weight is not None else DEFAULT_PRIOR_WEIGHT
         )
         min_uncertainty = (
-            float(raw_min_uncertainty) if raw_min_uncertainty is not None
+            float(raw_min_uncertainty)
+            if raw_min_uncertainty is not None
             else DEFAULT_MIN_UNCERTAINTY
         )
         trust_threshold = (
-            float(raw_trust_threshold) if raw_trust_threshold is not None
+            float(raw_trust_threshold)
+            if raw_trust_threshold is not None
             else DEFAULT_TRUST_THRESHOLD
         )
         max_stale_age = (
-            float(raw_max_stale_age) if raw_max_stale_age is not None
-            else DEFAULT_MAX_STALE_AGE
+            float(raw_max_stale_age) if raw_max_stale_age is not None else DEFAULT_MAX_STALE_AGE
         )
 
         return cls(

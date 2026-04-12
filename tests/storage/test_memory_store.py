@@ -9,7 +9,6 @@ def make_record(agent_id: str) -> TrustRecord:
     return TrustRecord(agent_id=agent_id, opinion=Opinion.vacuous())
 
 
-
 async def test_put_and_get():
     store = InMemoryTrustStore()
     record = make_record("agent-1")
@@ -19,12 +18,10 @@ async def test_put_and_get():
     assert retrieved.agent_id == "agent-1"
 
 
-
 async def test_get_nonexistent_returns_none():
     store = InMemoryTrustStore()
     result = await store.get("nonexistent")
     assert result is None
-
 
 
 async def test_delete():
@@ -39,7 +36,6 @@ async def test_delete():
     assert deleted_again is False
 
 
-
 async def test_list_agents():
     store = InMemoryTrustStore()
     await store.put(make_record("a1"))
@@ -49,13 +45,11 @@ async def test_list_agents():
     assert set(agents) == {"a1", "a2", "a3"}
 
 
-
 async def test_exists():
     store = InMemoryTrustStore()
     await store.put(make_record("agent-x"))
     assert await store.exists("agent-x") is True
     assert await store.exists("agent-y") is False
-
 
 
 async def test_close_preserves_data():
@@ -65,7 +59,6 @@ async def test_close_preserves_data():
     retrieved = await store.get("agent-persist")
     assert retrieved is not None
     assert retrieved.agent_id == "agent-persist"
-
 
 
 async def test_close_is_idempotent():
