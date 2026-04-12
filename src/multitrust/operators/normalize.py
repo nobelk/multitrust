@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import logging
-
 from multitrust.core.opinion import Opinion
+from multitrust.observability.logging import get_logger
 from multitrust.operators.constants import EPSILON_DEGENERATE, EPSILON_DRIFT_WARN
 
-_logger = logging.getLogger("multitrust.operators")
+_logger = get_logger("multitrust.operators")
 
 
 def normalize_opinion(
