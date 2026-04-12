@@ -17,6 +17,10 @@ class AgentNotFoundError(MultiTrustError):
     """Raised when an agent cannot be found."""
 
 
+class TrustThresholdError(MultiTrustError):
+    """Raised when an agent's trust is below the required threshold for an action."""
+
+
 class StoreError(MultiTrustError):
     """Raised when a storage operation fails."""
 

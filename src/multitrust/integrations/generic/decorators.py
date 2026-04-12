@@ -6,7 +6,7 @@ import functools
 from collections.abc import Callable
 from typing import Any
 
-from multitrust.core.errors import AgentNotFoundError
+from multitrust.core.errors import TrustThresholdError
 from multitrust.core.evidence import Evidence
 
 
@@ -17,7 +17,7 @@ def trust_aware(
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator that gates function execution on agent trust score.
 
-    Raises AgentNotFoundError if the agent's trust score is below threshold.
+    Raises TrustThresholdError if the agent's trust score is below threshold.
     """
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
@@ -25,7 +25,7 @@ def trust_aware(
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             trust = await manager.get_trust(agent_id)
             if trust < threshold:
-                raise AgentNotFoundError(
+                raise TrustThresholdError(
                     f"Agent {agent_id} trust {trust:.2f} below threshold {threshold}"
                 )
             return await fn(*args, **kwargs)

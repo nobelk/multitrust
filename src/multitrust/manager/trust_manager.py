@@ -303,6 +303,8 @@ class TrustManager:
             return await self._store.delete(agent_id)
 
     async def apply_decay(self, half_life_seconds: float | None = None) -> int:
+        if half_life_seconds is None and not self._config.enable_time_decay:
+            return 0
         hl = (
             half_life_seconds
             if half_life_seconds is not None

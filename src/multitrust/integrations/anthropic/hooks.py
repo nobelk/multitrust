@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from multitrust.core.errors import TrustThresholdError
 from multitrust.core.evidence import Evidence
 
 
@@ -30,11 +31,10 @@ class TrustPreMessageHook:
 
     async def __call__(self, messages: Any, *args: Any, **kwargs: Any) -> Any:
         """Pre-message hook — raise if trust is insufficient."""
-        if not await self.check():
-            from multitrust.core.errors import AgentNotFoundError
-
-            raise AgentNotFoundError(
-                f"Agent {self.agent_id} does not meet trust threshold {self.threshold}"
+        trust = await self._manager.get_trust(self.agent_id)
+        if trust < self.threshold:
+            raise TrustThresholdError(
+                f"Agent {self.agent_id} trust {trust:.2f} below threshold {self.threshold}"
             )
         return messages
 

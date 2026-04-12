@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from multitrust.core.errors import AgentNotFoundError
+from multitrust.core.errors import TrustThresholdError
 from multitrust.core.evidence import Evidence
 from multitrust.integrations.generic.context import TrustContext
 from multitrust.integrations.generic.decorators import collect_evidence, trust_aware
@@ -39,7 +39,7 @@ async def test_trust_aware_allows_trusted(mgr: TrustManager) -> None:
 
 
 async def test_trust_aware_blocks_untrusted(mgr: TrustManager) -> None:
-    """Decorated function raises AgentNotFoundError when trust < threshold."""
+    """Decorated function raises TrustThresholdError when trust < threshold."""
     await mgr.register_agent("agent-2")
     # Submit heavy negative evidence so trust drops below 0.5
     await mgr.submit_evidence(
@@ -50,7 +50,7 @@ async def test_trust_aware_blocks_untrusted(mgr: TrustManager) -> None:
     async def fn() -> str:
         return "should not reach"
 
-    with pytest.raises(AgentNotFoundError):
+    with pytest.raises(TrustThresholdError):
         await fn()
 
 

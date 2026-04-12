@@ -14,6 +14,7 @@ def time_decay(
     """Apply exponential time decay to an opinion, increasing uncertainty."""
     if half_life_seconds <= 0:
         return opinion
+    elapsed_seconds = max(0.0, elapsed_seconds)
     decay_factor = math.exp(-math.log(2) * elapsed_seconds / half_life_seconds)
     # Scale belief and disbelief by decay; remaining mass moves to uncertainty
     belief = opinion.belief * decay_factor

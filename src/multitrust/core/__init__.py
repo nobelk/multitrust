@@ -5,6 +5,7 @@ from multitrust.core.errors import (
     InvalidOpinionError,
     MultiTrustError,
     StoreError,
+    TrustThresholdError,
 )
 from multitrust.core.evidence import Evidence, EvidenceResult
 from multitrust.core.opinion import Opinion
@@ -23,6 +24,7 @@ __all__ = [
     "MultiTrustError",
     "Opinion",
     "StoreError",
+    "TrustThresholdError",
     "TrustLevel",
     "TrustRecord",
 ]

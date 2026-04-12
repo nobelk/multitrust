@@ -6,8 +6,14 @@ from multitrust.operators.constants import (
     EPSILON_DOGMATIC,
     EPSILON_ZERO_DENOM,
 )
-from multitrust.operators.mapping import opinion_to_evidence
 from multitrust.operators.normalize import normalize_opinion
+
+
+def _inverse_uncertainty_weights(u_A: float, u_B: float) -> tuple[float, float]:
+    inv_A = 1.0 / max(u_A, EPSILON_DOGMATIC)
+    inv_B = 1.0 / max(u_B, EPSILON_DOGMATIC)
+    total = inv_A + inv_B
+    return inv_A / total, inv_B / total
 
 
 def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
@@ -16,23 +22,7 @@ def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
     u_B = b.uncertainty
 
     if u_A < EPSILON_DOGMATIC and u_B < EPSILON_DOGMATIC:
-        # Both dogmatic: use evidence-weighted combination
-        try:
-            r_A, s_A = opinion_to_evidence(a)
-        except Exception:
-            r_A, s_A = 0.0, 0.0
-        try:
-            r_B, s_B = opinion_to_evidence(b)
-        except Exception:
-            r_B, s_B = 0.0, 0.0
-
-        total = r_A + s_A + r_B + s_B
-        if total < EPSILON_DEGENERATE:
-            gamma_A = 0.5
-            gamma_B = 0.5
-        else:
-            gamma_A = (r_A + s_A) / total
-            gamma_B = (r_B + s_B) / total
+        gamma_A, gamma_B = _inverse_uncertainty_weights(u_A, u_B)
 
         belief = gamma_A * a.belief + gamma_B * b.belief
         disbelief = gamma_A * a.disbelief + gamma_B * b.disbelief
@@ -45,31 +35,7 @@ def cumulative_fusion(a: Opinion, b: Opinion) -> Opinion:
     denom = u_A + u_B - u_A * u_B
 
     if denom < EPSILON_ZERO_DENOM:
-        # Near-zero denominator: use gamma-weighted combination (same as dogmatic branch)
-        ev_A: tuple[float, float] | None
-        ev_B: tuple[float, float] | None
-        try:
-            ev_A = opinion_to_evidence(a)
-        except Exception:
-            ev_A = None
-        try:
-            ev_B = opinion_to_evidence(b)
-        except Exception:
-            ev_B = None
-
-        if ev_A is not None and ev_B is not None:
-            nz_r_A, nz_s_A = ev_A
-            nz_r_B, nz_s_B = ev_B
-            total = nz_r_A + nz_s_A + nz_r_B + nz_s_B
-            if total < EPSILON_DEGENERATE:
-                gamma_A = 0.5
-                gamma_B = 0.5
-            else:
-                gamma_A = (nz_r_A + nz_s_A) / total
-                gamma_B = (nz_r_B + nz_s_B) / total
-        else:
-            gamma_A = 0.5
-            gamma_B = 0.5
+        gamma_A, gamma_B = _inverse_uncertainty_weights(u_A, u_B)
 
         belief = gamma_A * a.belief + gamma_B * b.belief
         disbelief = gamma_A * a.disbelief + gamma_B * b.disbelief

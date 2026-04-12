@@ -9,6 +9,7 @@ from multitrust.core.errors import (
     InvalidOpinionError,
     MultiTrustError,
     StoreError,
+    TrustThresholdError,
 )
 from multitrust.core.evidence import Evidence, EvidenceResult
 from multitrust.core.opinion import Opinion
@@ -64,6 +65,7 @@ __all__ = [
     "InvalidEvidenceError",
     "AgentNotFoundError",
     "StoreError",
+    "TrustThresholdError",
     "AuthorityNotFoundError",
     # Operators
     "evidence_decay",
