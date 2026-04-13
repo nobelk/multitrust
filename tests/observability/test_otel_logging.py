@@ -10,6 +10,15 @@ import pytest
 import multitrust.observability.logging as otel_logging
 from multitrust.observability.logging import get_logger
 
+try:
+    import opentelemetry.sdk  # noqa: F401
+
+    _has_otel = True
+except ImportError:
+    _has_otel = False
+
+requires_otel = pytest.mark.skipif(not _has_otel, reason="opentelemetry-sdk not installed")
+
 
 @pytest.fixture(autouse=True)
 def _reset_otel_state():
@@ -21,6 +30,7 @@ def _reset_otel_state():
     otel_logging._otel_provider = None
 
 
+@requires_otel
 class TestGetLoggerWithOtel:
     """Tests when opentelemetry-sdk is available (the real install)."""
 
@@ -151,6 +161,7 @@ class TestShutdown:
         otel_logging._shutdown_otel()
 
 
+@requires_otel
 class TestNormalizeUsesOtelLogger:
     """Verify that normalize_opinion logs flow through OTel."""
 
