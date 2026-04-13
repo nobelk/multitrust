@@ -69,7 +69,6 @@ async def test_decay_lifecycle_preserves_base_rate():
     assert abs(record_after.opinion.base_rate - base_rate_before) < 1e-9
 
 
-@pytest.mark.xfail(reason="BUG-7 open: apply_decay ignores enable_time_decay", strict=False)
 @pytest.mark.asyncio
 async def test_decay_lifecycle_no_op_when_disabled():
     config = MultiTrustConfig(enable_time_decay=False)

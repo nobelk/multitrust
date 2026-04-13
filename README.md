@@ -68,6 +68,14 @@ async def main():
 asyncio.run(main())
 ```
 
+## Examples
+
+See [`examples/hallucination_firewall.py`](examples/hallucination_firewall.py) — a self-contained demo of a multi-agent research pipeline where MultiTrust detects a degrading fact-checker and automatically gates it before hallucinated claims reach the final answer.
+
+```bash
+uv run python examples/hallucination_firewall.py
+```
+
 ## Key Concepts
 
 ### Opinion
