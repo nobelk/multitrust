@@ -9,6 +9,7 @@ from typing import Any, TypeVar
 
 from multitrust.config.settings import MultiTrustConfig
 from multitrust.core.evidence import Evidence
+from multitrust.core.explanation import TrustExplanation
 from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
 from multitrust.manager.trust_manager import TrustManager
@@ -95,6 +96,23 @@ class SyncTrustManager:
         return self._run(
             self._manager.submit_discounted_opinion(
                 agent_id, discounted_opinion, positive, negative
+            )
+        )
+
+    def explain_trust(
+        self,
+        agent_id: str,
+        *,
+        threshold: float | None = None,
+        projection_horizons: list[float] | None = None,
+        top_k_contributors: int = 5,
+    ) -> TrustExplanation:
+        return self._run(
+            self._manager.explain_trust(
+                agent_id,
+                threshold=threshold,
+                projection_horizons=projection_horizons,
+                top_k_contributors=top_k_contributors,
             )
         )
 

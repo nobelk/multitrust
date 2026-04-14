@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import math
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -9,6 +10,14 @@ from collections.abc import Callable, Iterator
 from multitrust.config.settings import MultiTrustConfig
 from multitrust.core.errors import AgentNotFoundError
 from multitrust.core.evidence import Evidence
+from multitrust.core.explanation import (
+    DecayInfo,
+    DecisionExplanation,
+    EvidenceContribution,
+    EvidenceSummary,
+    TrustExplanation,
+    TrustProjection,
+)
 from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
 from multitrust.observability.events import (
@@ -24,7 +33,17 @@ from multitrust.operators.discount import discount_opinion
 from multitrust.operators.fusion import cumulative_fusion, multi_source_averaging_fusion
 from multitrust.operators.mapping import evidence_to_opinion
 from multitrust.storage.base import TrustStore
+from multitrust.storage.evidence_ledger import EvidenceLedger, EvidenceLedgerEntry
 from multitrust.storage.memory import InMemoryTrustStore
+
+
+def _format_horizon(seconds: float) -> str:
+    """Format a time horizon in seconds to a human-readable label."""
+    if seconds < 3600:
+        return f"{seconds / 60:.0f}m"
+    if seconds < 86400:
+        return f"{seconds / 3600:.0f}h"
+    return f"{seconds / 86400:.0f}d"
 
 
 class TrustManager:
@@ -40,6 +59,7 @@ class TrustManager:
         fusion_fn: Callable[[Opinion, Opinion], Opinion] | None = None,
         discount_fn: Callable[[Opinion, Opinion], Opinion] | None = None,
         event_bus: EventBus | None = None,
+        evidence_ledger: EvidenceLedger | None = None,
     ) -> None:
         self._store = store if store is not None else InMemoryTrustStore()
         self._config = config if config is not None else MultiTrustConfig()
@@ -50,6 +70,7 @@ class TrustManager:
         self._fusion_fn = fusion_fn if fusion_fn is not None else cumulative_fusion
         self._discount_fn = discount_fn if discount_fn is not None else discount_opinion
         self._event_bus = event_bus
+        self._evidence_ledger = evidence_ledger
 
     @contextlib.contextmanager
     def _acquire_thread_lock(self) -> Iterator[None]:
@@ -131,6 +152,20 @@ class TrustManager:
                 record.updated_at = time.time()
 
                 await self._store.put(record)
+
+                # Record in evidence ledger if configured
+                if self._evidence_ledger is not None:
+                    ledger_entry = EvidenceLedgerEntry(
+                        agent_id=evidence.agent_id,
+                        authority_id=evidence.authority_id,
+                        entry_type="evidence",
+                        positive=evidence.positive,
+                        negative=evidence.negative,
+                        timestamp=evidence.timestamp,
+                        rule_name=evidence.rule_name,
+                        metadata=dict(evidence.metadata),
+                    )
+                    await self._evidence_ledger.append(ledger_entry)
 
                 if self._on_trust_updated is not None:
                     self._on_trust_updated(record)
@@ -253,6 +288,21 @@ class TrustManager:
 
                 await self._store.put(record)
 
+                # Record discounted opinion in ledger (distinct entry_type)
+                if self._evidence_ledger is not None:
+                    ledger_entry = EvidenceLedgerEntry(
+                        agent_id=agent_id,
+                        authority_id="distributed",
+                        entry_type="discounted_opinion",
+                        positive=positive,
+                        negative=negative,
+                        belief=discounted_opinion.belief,
+                        disbelief=discounted_opinion.disbelief,
+                        uncertainty=discounted_opinion.uncertainty,
+                        base_rate=discounted_opinion.base_rate,
+                    )
+                    await self._evidence_ledger.append(ledger_entry)
+
                 if self._on_evidence_submitted is not None:
                     evidence = Evidence(
                         agent_id=agent_id,
@@ -266,6 +316,199 @@ class TrustManager:
                     self._on_trust_updated(record)
 
                 return record
+
+    # ------------------------------------------------------------------
+    # Explainability API
+    # ------------------------------------------------------------------
+
+    _DEFAULT_HORIZONS: list[tuple[float, str]] = [
+        (3600.0, "1h"),
+        (43200.0, "12h"),
+        (86400.0, "24h"),
+        (604800.0, "7d"),
+    ]
+
+    async def explain_trust(
+        self,
+        agent_id: str,
+        *,
+        threshold: float | None = None,
+        projection_horizons: list[float] | None = None,
+        top_k_contributors: int = 5,
+    ) -> TrustExplanation:
+        """Return a structured explanation of an agent's current trust state.
+
+        This method is read-only and does not acquire the write lock.
+        """
+        from multitrust.manager.policy import TrustPolicy
+
+        record = await self._store.get(agent_id)
+        if record is None:
+            raise AgentNotFoundError(f"Agent '{agent_id}' not found")
+
+        now = time.time()
+        opinion = record.opinion
+        trust_score = opinion.trustworthiness
+        policy = TrustPolicy()
+        trust_level = policy.classify(trust_score)
+
+        limitations: list[str] = []
+
+        # --- 1. Projected trust ---
+        half_life = self._config.decay_half_life_seconds
+        horizons = projection_horizons or [float(h[0]) for h in self._DEFAULT_HORIZONS]
+        horizon_labels: dict[float, str] = (
+            {float(h[0]): h[1] for h in self._DEFAULT_HORIZONS}
+            if projection_horizons is None
+            else {}
+        )
+        projections: list[TrustProjection] = []
+        for secs in horizons:
+            label = horizon_labels.get(secs, _format_horizon(secs))
+            proj_opinion = time_decay(opinion, secs, half_life)
+            projections.append(
+                TrustProjection(
+                    horizon_label=label,
+                    elapsed_seconds=secs,
+                    projected_opinion=proj_opinion,
+                    projected_trust=proj_opinion.trustworthiness,
+                )
+            )
+
+        # --- 2. Authority attribution ---
+        top_contributors: list[EvidenceContribution] = []
+        if self._evidence_ledger is not None:
+            entries = await self._evidence_ledger.query(agent_id)
+            # Group by (authority_id, rule_name)
+            groups: dict[tuple[str, str | None], list[object]] = {}
+            for e in entries:
+                key = (e.authority_id, e.rule_name)
+                groups.setdefault(key, []).append(e)
+
+            contributions: list[EvidenceContribution] = []
+            base_rate = self._config.default_base_rate
+            for (auth_id, rule_name), group_entries in groups.items():
+                pos = sum(e.positive for e in group_entries)  # type: ignore[union-attr]
+                neg = sum(e.negative for e in group_entries)  # type: ignore[union-attr]
+                count = len(group_entries)
+                last_ts = max(e.timestamp for e in group_entries)  # type: ignore[union-attr]
+                # Heuristic impact: net evidence mapped through trustworthiness formula
+                total = pos + neg
+                group_trust = pos / total if total > 0 else base_rate
+                impact = group_trust - base_rate
+                contributions.append(
+                    EvidenceContribution(
+                        authority_id=auth_id,
+                        rule_name=rule_name,
+                        positive_total=pos,
+                        negative_total=neg,
+                        evidence_count=count,
+                        last_submitted=last_ts,
+                        impact_score=impact,
+                        impact_method="heuristic",
+                    )
+                )
+
+            contributions.sort(key=lambda c: abs(c.impact_score), reverse=True)
+            top_contributors = contributions[:top_k_contributors]
+
+            summary_data = await self._evidence_ledger.summary(agent_id)
+            evidence_summary = EvidenceSummary(
+                total_evidence_count=summary_data["total_evidence_count"],
+                total_positive=summary_data["total_positive"],
+                total_negative=summary_data["total_negative"],
+                distinct_authorities=summary_data["distinct_authorities"],
+                distinct_rules=summary_data["distinct_rules"],
+                earliest_evidence=summary_data["earliest_evidence"],
+                latest_evidence=summary_data["latest_evidence"],
+            )
+
+            # Check if eviction is active
+            if hasattr(self._evidence_ledger, "is_evicting") and self._evidence_ledger.is_evicting:
+                limitations.append(
+                    "Evidence ledger uses bounded storage; "
+                    "attribution is windowed, not lifetime-complete"
+                )
+        else:
+            limitations.append(
+                "No evidence ledger configured; authority/rule attribution unavailable"
+            )
+            evidence_summary = EvidenceSummary(
+                total_evidence_count=record.evidence_count,
+                total_positive=record.positive_total,
+                total_negative=record.negative_total,
+                distinct_authorities=0,
+                distinct_rules=0,
+                earliest_evidence=record.created_at,
+                latest_evidence=record.updated_at,
+            )
+
+        # --- 3. Decay info ---
+        elapsed = now - record.updated_at
+        decay_enabled = self._config.enable_time_decay
+        if decay_enabled and half_life > 0:
+            decay_factor = math.exp(-math.log(2) * elapsed / half_life)
+            decayed_opinion = time_decay(opinion, elapsed, half_life)
+        else:
+            decay_factor = 1.0
+            decayed_opinion = opinion
+        decay_info = DecayInfo(
+            enabled=decay_enabled,
+            half_life_seconds=half_life,
+            seconds_since_last_update=elapsed,
+            current_decay_factor=decay_factor,
+            opinion_if_decayed_now=decayed_opinion,
+            trust_if_decayed_now=decayed_opinion.trustworthiness,
+        )
+
+        # --- 4. Decision explanation ---
+        effective_threshold = threshold if threshold is not None else self._config.trust_threshold
+        margin = trust_score - effective_threshold
+        action = "allow" if margin >= 0 else "block"
+        # Estimate evidence needed to cross threshold (for simple threshold policy)
+        evidence_needed: float | None = None
+        if margin < 0:
+            # Approximate: how much positive evidence would shift trust above threshold
+            W = self._config.default_prior_weight
+            u = opinion.uncertainty
+            if u > 1e-10:
+                # delta_trust ≈ delta_belief ≈ (delta_r / (r+s+W+delta_r)) * (1 - base_rate_effect)
+                # Simplified: need enough positive evidence to raise trustworthiness by |margin|
+                denom = 1.0 - opinion.base_rate * u
+                needed = (
+                    abs(margin) * (record.positive_total + record.negative_total + W) / denom
+                    if denom > 1e-10
+                    else None
+                )
+                evidence_needed = max(0.0, needed) if needed is not None else None
+
+        decision = DecisionExplanation(
+            action=action,
+            basis="threshold",
+            threshold=effective_threshold,
+            trust_score=trust_score,
+            margin=margin,
+            policy_name="TrustManager.is_trusted",
+            evidence_needed=evidence_needed,
+        )
+
+        # --- Determine completeness ---
+        completeness = "partial" if limitations else "full"
+
+        return TrustExplanation(
+            agent_id=agent_id,
+            timestamp=now,
+            completeness=completeness,
+            limitations=limitations,
+            opinion=opinion,
+            trust_score=trust_score,
+            trust_level=trust_level,
+            projected_trust=projections,
+            top_contributors=top_contributors,
+            evidence_summary=evidence_summary,
+            decay=decay_info,
+            decision=decision,
+        )
 
     async def get_trust(self, agent_id: str) -> float:
         record = await self._store.get(agent_id)
@@ -360,3 +603,5 @@ class TrustManager:
 
     async def __aexit__(self, *exc: object) -> None:
         await self._store.close()
+        if self._evidence_ledger is not None:
+            await self._evidence_ledger.close()

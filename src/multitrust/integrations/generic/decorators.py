@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import functools
 from collections.abc import Callable
 from typing import Any
@@ -25,8 +26,13 @@ def trust_aware(
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             trust = await manager.get_trust(agent_id)
             if trust < threshold:
+                explanation = None
+                if hasattr(manager, "explain_trust"):
+                    with contextlib.suppress(Exception):
+                        explanation = await manager.explain_trust(agent_id, threshold=threshold)
                 raise TrustThresholdError(
-                    f"Agent {agent_id} trust {trust:.2f} below threshold {threshold}"
+                    f"Agent {agent_id} trust {trust:.2f} below threshold {threshold}",
+                    explanation=explanation,
                 )
             return await fn(*args, **kwargs)
 

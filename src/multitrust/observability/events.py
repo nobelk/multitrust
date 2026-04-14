@@ -39,6 +39,11 @@ class TrustThresholdCrossedEvent(TrustEvent):
     direction: str = "below"  # "above" or "below"
 
 
+@dataclass
+class TrustExplainedEvent(TrustEvent):
+    explanation: Any = None  # TrustExplanation (Any to avoid circular import)
+
+
 Handler = Callable[[Any], Awaitable[None]]
 
 

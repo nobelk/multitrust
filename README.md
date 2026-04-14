@@ -126,7 +126,53 @@ async with TrustManager() as manager:
     await manager.submit_evidence(Evidence(...))
     trust = await manager.get_trust("agent-1")
     record = await manager.get_agent("agent-1")   # Full TrustRecord
+    explanation = await manager.explain_trust("agent-1")  # Why this score?
 ```
+
+A synchronous wrapper is also available via `SyncTrustManager`.
+
+### Explainability
+
+Use `explain_trust()` to get a structured breakdown of *why* an agent has its current trust score — covering the opinion, evidence contributions, decay effects, and decision reasoning:
+
+```python
+from multitrust import TrustManager
+
+async with TrustManager() as manager:
+    await manager.register_agent("fact-checker")
+    # ... submit evidence ...
+
+    explanation = await manager.explain_trust(
+        "fact-checker",
+        threshold=0.6,
+    )
+
+    # Structured data: opinion, contributors, decay, decision
+    print(explanation.trust_score)       # 0.73
+    print(explanation.trust_level)       # TrustLevel.MODERATE
+    print(explanation.decision.action)   # "allow"
+    print(explanation.decision.margin)   # +0.13
+
+    # Human-readable summary
+    print(explanation.summary())
+    # Agent "fact-checker" — trust: 0.73 (MODERATE)
+    #   Opinion: b=0.60  d=0.12  u=0.28  base_rate=0.50
+    #   Decision: ALLOW (threshold 0.60, margin +0.13)
+    #   Top contributors:
+    #     1. authority="validator"  rule="—"  +14/-2  impact=+0.18
+    #   ...
+
+    # JSON-serializable dict for logging or API responses
+    data = explanation.to_dict()
+```
+
+Parameters:
+
+- `threshold` — override the config's `trust_threshold` for the decision explanation.
+- `projection_horizons` — custom time horizons in seconds (defaults: 1h, 12h, 24h, 7d).
+- `top_k_contributors` — how many top authorities/rules to return (default 5).
+
+When an `EvidenceLedger` is configured, the explanation includes per-authority/rule attribution. Without a ledger, the explanation is still returned but marked as `partial` with limited contributor detail.
 
 ### Generic Decorators
 
@@ -217,15 +263,44 @@ async with TrustManager(store=store) as manager:
     # Data persists across restarts
 ```
 
+### Evidence Ledger
+
+The evidence ledger is an append-only audit trail that records every piece of evidence submitted, enabling detailed attribution in `explain_trust()`. It is optional — without it, explanations are still available but marked as `partial`.
+
+```python
+from multitrust import TrustManager, InMemoryEvidenceLedger
+
+# In-memory ledger (good for development and testing)
+ledger = InMemoryEvidenceLedger(max_size=1000)
+async with TrustManager(evidence_ledger=ledger) as manager:
+    await manager.register_agent("agent-1")
+    # Evidence is automatically recorded in the ledger on submit
+    await manager.submit_evidence(Evidence(...))
+
+    # Full explanation with per-authority attribution
+    explanation = await manager.explain_trust("agent-1")
+    print(explanation.completeness)  # "full"
+```
+
+A SQLite-backed ledger is also available for persistent audit trails:
+
+```python
+from multitrust import SQLiteEvidenceLedger
+
+ledger = SQLiteEvidenceLedger("evidence.db")
+async with TrustManager(evidence_ledger=ledger) as manager:
+    ...
+```
+
 ## Project Structure
 
 ```
 src/multitrust/
-├── core/               # Core types: Opinion, Evidence, TrustRecord, errors
+├── core/               # Core types: Opinion, Evidence, TrustRecord, errors, explanation
 ├── config/             # MultiTrustConfig, defaults, env-var loading
 ├── operators/          # Fusion, discount, decay, mapping operators
 ├── manager/            # TrustManager, TrustAuthority, policies
-├── storage/            # TrustStore protocol, InMemoryTrustStore, SQLiteTrustStore
+├── storage/            # TrustStore protocol, InMemoryTrustStore, SQLiteTrustStore, EvidenceLedger
 ├── evidence/           # EvidenceCollector, RuleEngine
 ├── integrations/
 │   ├── generic/        # Decorators and TrustContext (no framework deps)

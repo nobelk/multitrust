@@ -20,6 +20,10 @@ class AgentNotFoundError(MultiTrustError):
 class TrustThresholdError(MultiTrustError):
     """Raised when an agent's trust is below the required threshold for an action."""
 
+    def __init__(self, *args: object, explanation: object | None = None) -> None:
+        super().__init__(*args)
+        self.explanation = explanation
+
 
 class StoreError(MultiTrustError):
     """Raised when a storage operation fails."""

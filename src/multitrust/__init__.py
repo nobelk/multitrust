@@ -12,6 +12,14 @@ from multitrust.core.errors import (
     TrustThresholdError,
 )
 from multitrust.core.evidence import Evidence, EvidenceResult
+from multitrust.core.explanation import (
+    DecayInfo,
+    DecisionExplanation,
+    EvidenceContribution,
+    EvidenceSummary,
+    TrustExplanation,
+    TrustProjection,
+)
 from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
 from multitrust.core.types import AgentId, AuthorityId, TrustLevel
@@ -28,6 +36,7 @@ from multitrust.observability.events import (
     EventBus,
     EvidenceSubmittedEvent,
     TrustEvent,
+    TrustExplainedEvent,
     TrustThresholdCrossedEvent,
     TrustUpdatedEvent,
 )
@@ -46,8 +55,11 @@ from multitrust.operators.mapping import (
     opinion_to_evidence,
 )
 from multitrust.storage.base import TrustStore
+from multitrust.storage.evidence_ledger import EvidenceLedger, EvidenceLedgerEntry
 from multitrust.storage.memory import InMemoryTrustStore
+from multitrust.storage.memory_ledger import InMemoryEvidenceLedger
 from multitrust.storage.sqlite import SQLiteTrustStore
+from multitrust.storage.sqlite_ledger import SQLiteEvidenceLedger
 
 __all__ = [
     # Version
@@ -60,6 +72,13 @@ __all__ = [
     "AgentId",
     "AuthorityId",
     "TrustLevel",
+    # Explanation types
+    "TrustExplanation",
+    "TrustProjection",
+    "EvidenceContribution",
+    "EvidenceSummary",
+    "DecayInfo",
+    "DecisionExplanation",
     # Errors
     "MultiTrustError",
     "InvalidOpinionError",
@@ -92,6 +111,10 @@ __all__ = [
     "TrustStore",
     "InMemoryTrustStore",
     "SQLiteTrustStore",
+    "EvidenceLedger",
+    "EvidenceLedgerEntry",
+    "InMemoryEvidenceLedger",
+    "SQLiteEvidenceLedger",
     # Evidence
     "CallbackCollector",
     "EvidenceCollector",
@@ -109,4 +132,5 @@ __all__ = [
     "EvidenceSubmittedEvent",
     "AgentRegisteredEvent",
     "TrustThresholdCrossedEvent",
+    "TrustExplainedEvent",
 ]
