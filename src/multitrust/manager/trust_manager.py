@@ -380,7 +380,7 @@ class TrustManager:
         if self._evidence_ledger is not None:
             entries = await self._evidence_ledger.query(agent_id)
             # Group by (authority_id, rule_name)
-            groups: dict[tuple[str, str | None], list[object]] = {}
+            groups: dict[tuple[str, str | None], list[EvidenceLedgerEntry]] = {}
             for e in entries:
                 key = (e.authority_id, e.rule_name)
                 groups.setdefault(key, []).append(e)
@@ -388,10 +388,10 @@ class TrustManager:
             contributions: list[EvidenceContribution] = []
             base_rate = self._config.default_base_rate
             for (auth_id, rule_name), group_entries in groups.items():
-                pos = sum(e.positive for e in group_entries)  # type: ignore[union-attr]
-                neg = sum(e.negative for e in group_entries)  # type: ignore[union-attr]
+                pos = sum(e.positive for e in group_entries)
+                neg = sum(e.negative for e in group_entries)
                 count = len(group_entries)
-                last_ts = max(e.timestamp for e in group_entries)  # type: ignore[union-attr]
+                last_ts = max(e.timestamp for e in group_entries)
                 # Heuristic impact: net evidence mapped through trustworthiness formula
                 total = pos + neg
                 group_trust = pos / total if total > 0 else base_rate
