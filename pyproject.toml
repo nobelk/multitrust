@@ -15,8 +15,6 @@ config = ["pydantic-settings>=2.0"]
 logging = ["structlog>=24.0"]
 otel = ["opentelemetry-api>=1.20", "opentelemetry-sdk>=1.20"]
 sqlite = ["aiosqlite>=0.20"]
-redis = ["redis[hiredis]>=5.0"]
-postgres = ["asyncpg>=0.29"]
 metrics = ["prometheus-client>=0.20"]
 langgraph = ["langgraph>=0.2"]
 crewai = ["crewai>=0.50"]
@@ -24,7 +22,7 @@ openai = ["openai-agents>=0.1"]
 adk = ["google-adk>=0.1"]
 anthropic = ["anthropic>=0.30"]
 full = [
-    "multitrust[config,logging,otel,sqlite,redis,postgres,metrics,langgraph,crewai,openai,adk,anthropic]"
+    "multitrust[config,logging,otel,sqlite,metrics,langgraph,crewai,openai,adk,anthropic]"
 ]
 dev = [
     "pytest>=9.0",
