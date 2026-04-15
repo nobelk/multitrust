@@ -29,6 +29,7 @@ from multitrust.integrations.generic.context import TrustContext
 from multitrust.integrations.generic.decorators import collect_evidence, trust_aware
 from multitrust.manager.policy import DecisionPolicy, ThresholdPolicy, TrustPolicy
 from multitrust.manager.sync import SyncTrustManager
+from multitrust.manager.timeline import TimelinePoint, TrustTimeline, generate_trust_timeline
 from multitrust.manager.trust_authority import DistributedAuthority, TrustAuthority
 from multitrust.manager.trust_manager import TrustManager
 from multitrust.observability.events import (
@@ -100,6 +101,10 @@ __all__ = [
     "opinion_to_evidence",
     "opinion_to_beta_parameters",
     "beta_to_opinion",
+    # Timeline
+    "TrustTimeline",
+    "TimelinePoint",
+    "generate_trust_timeline",
     # Manager
     "SyncTrustManager",
     "TrustManager",

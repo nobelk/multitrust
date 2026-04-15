@@ -12,6 +12,7 @@ from multitrust.core.evidence import Evidence
 from multitrust.core.explanation import TrustExplanation
 from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
+from multitrust.manager.timeline import TrustTimeline
 from multitrust.manager.trust_manager import TrustManager
 from multitrust.storage.base import TrustStore
 
@@ -113,6 +114,23 @@ class SyncTrustManager:
                 threshold=threshold,
                 projection_horizons=projection_horizons,
                 top_k_contributors=top_k_contributors,
+            )
+        )
+
+    def trust_timeline(
+        self,
+        agent_id: str,
+        *,
+        duration_seconds: float | None = None,
+        half_life_seconds: float | None = None,
+        num_points: int = 20,
+    ) -> TrustTimeline:
+        return self._run(
+            self._manager.trust_timeline(
+                agent_id,
+                duration_seconds=duration_seconds,
+                half_life_seconds=half_life_seconds,
+                num_points=num_points,
             )
         )
 

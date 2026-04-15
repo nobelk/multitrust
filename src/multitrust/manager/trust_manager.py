@@ -20,6 +20,7 @@ from multitrust.core.explanation import (
 )
 from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
+from multitrust.manager.timeline import TrustTimeline, generate_trust_timeline
 from multitrust.observability.events import (
     AgentRegisteredEvent,
     EventBus,
@@ -678,6 +679,48 @@ class TrustManager:
                         await self._store.delete(agent_id)
                         evicted += 1
         return evicted
+
+    async def trust_timeline(
+        self,
+        agent_id: str,
+        *,
+        duration_seconds: float | None = None,
+        half_life_seconds: float | None = None,
+        num_points: int = 20,
+    ) -> TrustTimeline:
+        """Generate a trust decay timeline for an agent.
+
+        Parameters
+        ----------
+        agent_id:
+            The agent whose current opinion is used as the starting point.
+        duration_seconds:
+            Total duration to simulate. Defaults to 4x the half-life.
+        half_life_seconds:
+            Override decay half-life. Defaults to config value.
+        num_points:
+            Number of sample points along the timeline.
+
+        Returns
+        -------
+        TrustTimeline:
+            Timeline object with `to_text()` and `plot()` methods.
+        """
+        record = await self._store.get(agent_id)
+        if record is None:
+            raise AgentNotFoundError(agent_id)
+        hl = (
+            half_life_seconds
+            if half_life_seconds is not None
+            else (self._config.decay_half_life_seconds)
+        )
+        return generate_trust_timeline(
+            record.opinion,
+            hl,
+            agent_id=agent_id,
+            duration_seconds=duration_seconds,
+            num_points=num_points,
+        )
 
     async def __aenter__(self) -> TrustManager:
         return self
