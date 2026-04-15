@@ -1,0 +1,1132 @@
+Main Track
+
+AAMAS 2021, May 3-7, 2021, Online
+
+A General Trust Framework for Multi-Agent Systems
+Mingxi Cheng
+
+University of Southern California
+mingxic@usc.edu
+
+Shahin Nazarian
+
+University of Southern California
+shahin.nazarian@usc.edu
+
+Chenzhong Yin
+
+University of Southern California
+chenzhoy@usc.edu
+
+Jyotirmoy Deshmukh
+
+University of Southern California
+jdeshmuk@usc.edu
+
+ABSTRACT
+
+Transportation systems of the future can be best modeled as multiagent systems. A number of coordination protocols such as autonomous intersection management (AIM), adaptive cooperative
+tra�c light control (TLC), cooperative adaptive cruise control (CACC),
+among others have been developed with the goal of improving the
+safety and e�ciency of such systems. The overall goal in these
+systems is to provide behavioral guarantees under the assumption
+that the participating agents work in concert with a centralized (or
+distributed) coordinator. While there is work on analyzing such
+systems from a security perspective, we argue that there is limited work on quantifying trustworthiness of individual agents in a
+multi-agent system. We propose a framework that uses an epistemic
+logic to quantify trustworthiness of agents, and embed the use of
+quantitative trustworthiness values into control and coordination
+policies. Our modi�ed control policies can help the multi-agent
+system improve its safety in the presence of untrustworthy agents
+(and under certain assumptions, including malicious agents). We
+empirically show the e�ectiveness of our proposed trust framework
+by embedding it into AIM, TLC, and CACC platooning algorithms.
+In our experiments, our trust framework accurately detects attackers in CACC platoons; mitigates the e�ect of untrustworthy agents
+in AIM; and trust-aware TLC and AIM reduce collisions in all cases
+compared to the vanilla versions of these algorithms.
+
+KEYWORDS
+
+Trust Framework, Multi-agent Systems, Platoons, Autonomous
+Intersection Management, Reinforcement Learning
+ACM Reference Format:
+Mingxi Cheng, Chenzhong Yin, Junyao Zhang, Shahin Nazarian, Jyotirmoy Deshmukh, and Paul Bogdan. 2021. A General Trust Framework for
+Multi-Agent Systems. In Proc. of the 20th International Conference on Autonomous Agents and Multiagent Systems (AAMAS 2021), Online, May 3–7,
+2021, IFAAMAS, 9 pages.
+
+1 INTRODUCTION
+
+Multi-agent systems (MASs) consist of multiple, interacting, intelligent cyber-agents [2, 8, 26], and the successful behavior of a
+MAS typically depends on safe coordination between the agents.
+For autonomous and mobile MASs, such as those found in ground
+transportation systems or in unmanned aerial vehicles comprising
+avionic systems, coordination may be used to endow greater safety
+Proc. of the 20th International Conference on Autonomous Agents and Multiagent Systems
+(AAMAS 2021), U. Endriss, A. Nowé, F. Dignum, A. Lomuscio (eds.), May 3–7, 2021, Online.
+© 2021 International Foundation for Autonomous Agents and Multiagent Systems
+(www.ifaamas.org). All rights reserved.
+
+Junyao Zhang
+
+University of Southern California
+junyaozh@usc.edu
+
+Paul Bogdan
+
+University of Southern California
+pbogdan@usc.edu
+
+over human-operated agents or to improve the e�ciency of the system (e.g. tra�c throughput or increasing the sensing range) or both.
+For instance, in the context of tra�c light control or autonomous
+intersection management [11], the goal is to improve the throughput of tra�c intersections in a safe fashion, for tra�c consisting
+of a mixture of human-driven, semi-autonomous and autonomous
+vehicles [5, 27]. Similarly, there is work on cooperative adaptive
+cruise control where the objective is to improve tra�c� ow and
+fuel consumption while ensuring collision-freedom [15, 23].
+An important consideration for MASs is to achieve safe and e�cient coordination when the MAS consists of a mixture of trusted
+and untrusted agents. Here, being trustworthy can encapsulate different things: (i) the agent follows the commands of the coordinator
+to a high degree of precision, (ii) the agent reports its state (e.g.
+position, velocity) with consistent accuracy, or (iii) the agent is not
+malicious, i.e. it does not purposefully engage in behavior that can
+endanger system safety. For instance, vehicle platooning systems
+require AI strategies to analyze platoon members and evaluate their
+degree of trustworthiness in order to avoid attacks that can lead to
+accidents. In the works of [6, 13, 14], researchers take the front collision warning, lane departure warning, and autonomous braking
+system into consideration to construct a trust evaluation framework. However, these approaches analyze individual vehicles in
+isolation and do not account for communication and co-operation
+among vehicles. Moreover, in these approaches, the system can
+only react to only one malicious attack. When the platoon system
+is attacked by multiple malicious agents, the system can be deceived and led to a catastrophic state. Existing trust frameworks
+are ad hoc, which makes it di�cult to apply them universally. In
+this paper, we propose a universal framework based on a logical
+characterization of trust that allows us to quantify trust in individual agents in a systematic fashion. Our framework considers both
+short-term and long-term behavioral histories of agents to quantify
+their trustworthiness.
+We envision a cloud-based (or edge-based) architecture where
+trust values for agents are stored in a secure fashion, AND where
+authenticated decision-making nodes (such as centralized or distributed coordinators) are able to access trust values for agents to
+make real-time decisions. Through quantitative trustworthiness
+scores, we are able to perform trust-aware decision-making, where
+a coordinator is able to explore trade-o�s between safety and ef�ciency when orchestrating coordination for a mixture of trusted
+and untrusted agents. Our main contributions are as follows:
+• We propose a framework to mathematically quantify trustworthiness of agents in MASs using the formalism of subjective logic.
+
+332
+
+Main Track
+
+AAMAS 2021, May 3-7, 2021, Online
+
+and disbelief loosely correspond to the probabilities of an agent
+being trustworthy and untrustworthy. Uncertainty represents the
+lack of evidence to support any speci�c probability, e.g., D-A = 1
+represents we know nothing about agent’s behavior and by default,
+with chance of 0-A = 0.5, it can be trustworthy.
+A
+
+De�nition 2.1 (Opinion [18]). In SL, a binomial opinion , - =
+{1-A , 3-A , D-A , 0-A } represents the opinion of an observer A about
+- , where 1-A , 3-A , D-A , and 0-A are as previously de�ned, and 1-A +
+3-A + D-A = 1 for 0-A 2 [0, 1] and base rate is akin to a prior.
+De�nition 2.2 (Trustworthiness [8, 18]). The trustworthiness of assessed by A is de�ned as ?-A = 1-A + D-A ⇤ 0-A , where 1-A , D-A
+and 0-A are as de�ned previously, and ?-A 2 [0, 1].
+
+Figure 1: a. A trust framework where the centralized trust manager
+A keeps inspecting target agents X. b. A does not directly inspect
+X but relies on distributed trust authorities , which may or may
+not be trustworthy. c. Both A and directly inspect X.
+
+De�nition 2.3 (Evidence [18]). Given a behavioral property i, a
+positive evidence A quanti�es the satisfaction of the property i by a
+behavior of - as observed by A, a negative evidence B quanti�es the
+violation of i by the observed behavior of - . A binomial opinion
+is formed using evidences based on the principle that A contributes
+to the belief mass and B contributes to disbelief mass using the
+following equations:
+A
+B
+l
+, 3-A =
+, D-A =
+, (1)
+1-A =
+A +B +l
+A +B +l
+A +B +l
+where l = 2 is a default non-informative prior weight.
+
+We propose that an agent’s trustworthiness is updated using
+long-term and short-term observations of the agent’s behavior.
+• We provide a trust-aware decision-making framework that uses
+the quanti�ed trust values to choose coordination policies that
+achieve the desired trade o� between safety and e�ciency.
+• We demonstrate the feasibility and applicability of the proposed
+trust framework by applying it in three MASs: cooperative adaptive cruise control (CACC)-based platoons, an autonomous intersection management (AIM) system, and a reinforcement learningbased tra�c light control (TLC) system. With minimum modi�cation of existing MASs (e.g., AIM, TLC), we can formulate
+trust-aware decision-making strategies and achieve better performance.
+
+2
+
+Fig. 1a shows our proposed trust-aware MAS consisting of a
+centralized manager A that keeps inspecting agents and updates
+their trustworthiness ?-A , 8- 2 X (where X represents the set of
+A
+
+all agents) based on time-varying , - , 8- 2 X (which are updated
+based on observed evidences A or B). Instead of keeping a record
+of all past evidence histories, i.e., A and B, we keep a hash table H
+that records (long-term) opinions of X and use a cumulative fusion
+operator [18] to merge established (long-term) opinions and newly
+observed (short-term) opinions.1
+
+QUANTIFYING TRUST IN MAS
+
+In MASs, such as air/drone tra�c control system [7, 17], adaptive
+cruise control system [16], multi-agent autonomous tra�c management [4], and even federated learning [19] in machine learning,
+the safety and behavior of one or a subset of agents a�ects the
+e�ciency and safety of the whole system. Such systems usually
+are vulnerable to agents that are untrustworthy for various reasons
+including operating defects, uncertain operating environments or
+purposeful malice. In these cases, a subjective measurement is a
+must to identify untrustworthy agents. Therefore, we propose a
+trust quanti�cation framework based on Subjective Logic (SL) [18].
+Our framework interprets agent-behaviors and assigns a trustworthiness score to the agents.
+To explain the basic idea, we assume that the MAS is endowed
+with a secure and trusted observer known as the trust manager (denoted as A) that observes the behavior of agents, extracts knowledge (opinion in SL parlance) from observations (evidence in SL
+parlance) and computes the agents’ trustworthiness. We now provide the de�nitions required for the calculation of trustworthiness
+in our proposed trust framework. Given a trust manager A and
+a speci�ed agent - in a MAS, let 1-A denote the belief mass that
+A has in - , let 3-A denote the disbelief mass, let D-A denote the
+uncertainty mass, and 0-A denote the base rate. Intuitively, the belief
+
+De�nition 2.4 (Cumulative Fusion Operator). Let us assume a
+A
+
+long-term opinion about agent - , , - , is calculated based on previous observations A [0,C g ] and B [0,C g ] from time 0 to C g, and newly
+observed evidences A [C g,C] and B [C g,C] form a short-term opinion
+⇢
+
+, - . The updated opinion takes evidences from time period [0, C],
+A
+
+⇢
+
+which is equivalent to the cumulative fusion of , - and , - :
+A
+
+,-
+
+A⇧⇢
+
+,-
+
+A
+
+=,-
+
+⇢
+
+,-.
+
+(2)
+
+See Supplementary Materials Section A for derivation details. 2
+In addition to the centralized trust authority A, there are also
+distributed trust authorities that help inspect agents and collect
+evidence as shown in Fig. 1b. The existence of enlarges the observation range, increases the observation frequency, and relaxes
+the requirement that A needs to directly inspect agents. keeps
+local trust records of covered agents and sends updates to A regularly. For example, in tra�c systems, local road side units inspect
+1 Assume short- and long-term opinions are established by evidences (A , B ) and
+1 1
+(A 2 , B 2 ) , which are observed in non-overlapping time periods. Applying cumulative
+
+fusion to combine opinions is equivalent to summing up evidences (A 1 , B 1 ) and (A 2 , B 2 ) .
+2 Supplementary Materials can be found in this link https://drive.google.com/drive/
+folders/1gxEYtS_v3HLyZ7outQiM-bdQIvmt0VFe?usp=sharing.
+
+333
+
+Main Track
+
+AAMAS 2021, May 3-7, 2021, Online
+
+vehicles and report to the department of motor vehicles. To merge
+the (long-term) opinions from A and , we use cumulative fusion
+A
+
+A⇧
+
+operator: , , - . Note that, in our trust framework, A can
+operate alone without helpers due to the assumption that A can
+directly inspect agents as shown in Fig. 1a.
+We assume that A is always trustworthy, and may or may
+not be trustworthy. For example, in a tra�c system, if road side
+units serve as , then they usually are trustworthy. However, if
+vehicles serve as , for example, if the trailing vehicle reports to A
+about leader vehicle, then can be untrustworthy and their trust
+evaluations may not be trustworthy. To deal with such scenarios,
+A applies a discounting factor [18] to take ’s own trustworthiness
+into consideration when relying ’s evaluations.3
+De�nition 2.5 (Discounting Operator). Assume A would like to
+develop trust in - and A relies on for evidence collection and
+opinion/trust evaluation. A’s opinion about is represented as
+
+Figure 2: A trust framework in tra�c systems. A and keep inspecting the target vehicle - . Both road side units and other vehicles adjacent to - serve as . If we assume road side units are trustworthy, then the opinion updating equation can be simpli�ed as
+
+A
+
+, , and ’s opinion about - is , - . Based on the combination
+of A’s trust in and ’s opinion about - , A updates its opinion
+about - using the discounting operator ⌦:
+[ A; ]
+A
+,=, ⌦,-.
+
+A
+
+,-
+
+(3)
+
+the�rst
+A
+
+, - is a long-term opinion extracted from H.
+
+Complete mathematical derivations of discounting operator ⌦ is
+[ A; ]
+
+given in Supplementary Material section B. , -
+
+is a short-term
+
+A
+
+are not necessarily trustworthy. We show with simulation results
+that our trust-based attack detection can accurately detect attackers.
+To demonstrate how to extend existing control policies to be
+trust-aware, we provide two case studies regarding intersection
+management. We consider situations where trustworthy distributed
+authorities are appreciated but not necessary. The� rst case study
+in Section 4, is of the Autonomous Intersection Management (AIM)
+protocol [27], where we show how to modify AIM to a trust-aware
+version called AIM-Trust. Here, we empirically demonstrate that
+AIM-Trust can achieve an e�ective trade o� between throughput
+and safety (de�ned as freedom from collisions). The second case
+study in Section 5 uses a coordination policy learned using reinforcement learning (RL) for tra�c light control (TLC). We augment
+the TLC policy with trust-awareness in a minimal fashion, and
+show that the collision rate decreases in all scenarios involving
+vehicles with mixed trustworthiness values.
+
+opinion. To merge with the long-term opinion , - , substituting
+
+⇢
+[ A; ]
+, - with , in Eq. 2 generates the designated result. In cases
+
+where there are both A and as shown in Fig. 1c, or there are
+multiple inspecting the target agent - at the same time, we need
+to have a way to merge multiple short-term opinions together. We
+can make use of the averaging fusion operator in SL to take the
+average of two opinions observed at the same time [18].4
+De�nition 2.6. Subject to trust authorities A and , and a speci�ed agent - in a multi-agent system, assume both A and inspect
+- in the same time period [C g,C ] and may or may not be trustA
+
+worthy. A and develop opinions to - as , - , and , - , respectively. The short-term opinion about - combines both authorities’
+opinions via an averaging fusion operator :
+A⇧[ ; ]
+
+,-
+
+A
+
+[ ; ]
+
+=,- ,-
+
+(4)
+
+.
+
+Detailed math equations of averaging fusion operator ⌦ can be
+found in Supplementary Materials Section C. If distributed authorA⇧
+is trustworthy then Eq. 4 is simpli�ed as , -
+
+3
+
+TRUST-BASED MALICIOUS ATTACKER
+DETECTION IN CACC PLATOONS
+3.1 CACC Platoons
+
+A
+=,-
+
+ity
+,-.
+If the observing authorities are both distributed authorities, namely
+1 and
+
+[ ; 1 ]⇧[ ; 2 ]
+. Then to merge with
+2 , then Eq. 4 reads: , -
+
+Recent advances in vehicle-to-everything (V2X) communication
+have enabled the development of platooning to save energy, improve e�ciency, and ensure safety [6]. In a platoon, a chain of
+vehicles equipped with V2X sense the surroundings and maintain a
+constant inter-vehicle space. The head vehicle controls the platoon
+by broadcasting its kinematic data, such as its designated velocity
+E, and inter-vehicle space 3. The member vehicles follow the head
+vehicle’s instructions and use beacons from other platoon members
+to control velocity and inter-vehicle space. 5
+
+long-term history of - , use cumulative fusion operator de�ned
+in De�nition 2.4. A demonstration example of our proposed trust
+framework in tra�c systems is shown in Fig. 2, which corresponding to the scenario in Fig. 1c.
+To demonstrate how the proposed trust framework works in
+di�erent applications, we� rst show its feasibility in the context of
+CACC platoons (Section 3) where the distributed trust authorities
+3 Assume
+
+[A; 2 ]
+A
+A
+, - ) , - , where on the left hand side,
+A
+, - in the bracket is short-term opinion, and the second
+
+(, -1 , -
+
+’s trustworthiness is ? A , then A discounts ’s opinions by ? A .
+
+4 Assume two short-term opinions are established by evidences (A , B ) and (A , B ) ,
+1 1
+2 2
+
+5 Beacon messages containing vehicle information are communicated by vehicles to
+
+which are observed in the same time periods. Applying averaging fusion to combine
+opinions is equivalent to take average of evidences (A 1 , B 1 ) and (A 2 , B 2 ) .
+
+increase cruise stability [14].
+
+334
+
+Main Track
+
+3.2
+
+AAMAS 2021, May 3-7, 2021, Online
+
+Attacker Model
+
+A
+
+Various CACC (platoon) attacks have been proposed in the literature, including jamming attacks, V2X data injection [3] and sensor
+manipulation attacks [28]. Attack defense models such as misbehavior detection has also been studied [14]. In this case study, we aim
+to detect attackers in platoons, so the core of our attacker model
+is that attackers gain control over vehicles and their actions are
+observable by participants. In order to detect adversarial behavior,
+we focus on V2X data injection attacks: acceleration data injections.
+
+3.3
+
+Trust-based Attacker Detection Model
+
+A =A +1
+B =B +1
+i⌘
+
+k⌘
+b⌘
+
+We now demonstrate how to apply our trust framework to detect attackers in CACC platoons. We assume a centralized trust
+authority A that maintains a trustworthiness table H . Such an
+authority could either be a cloud-based service or an edge computing node. We assume that the head vehicle is the leader and A
+only directly inspects leader to reduce inspection intensity. We also
+assume that each vehicle - serves as a distributed trust authority
+and reports to A when evaluating the adjacent vehicles; and it is
+also a target, when the adjacent vehicles evaluate - . Since can
+be untrustworthy, when it reports to A, we apply the discounting
+operator de�ned in Eq. 3, De�nition 2.5. Assume the long-term trust
+histories of - and and its successor and predecessor vehicles 1 and
+
+3.4
+
+1 and 2 use sensors to
+get accurate information including sensed inter-vehicle distances
+x - , x - and sensed - ’s speed sp- , sp- . Therefore, they evaluate
+1
+
+2
+
+1
+
+[ A; 1 ]
+
+[ A; 2 ]
+
+,-
+
+= (,
+
+A
+
+1
+
+1
+
+⌦ , - ) (,
+
+A
+
+2
+
+2
+
+⌦ , - ).
+
+(5)
+
+After combining the long-term opinion, the opinion about - reads:
+A
+
+[ A; 1 ]
+
+[ A; 2 ]
+
+A
+
+if (x - , C) |= i ^ (sp- , C) |= k ^ (jk - , C) |= b;
+otherwise.
+
+G [C1 ,C2 ] |x - (C )
+G [C1 ,C2 ]
+
+|sp- (C )
+⇣
+
+-
+
+3 |  & B?024 ^ |x - (C )
+E |  & B?443
+
+^ |sp- (C )
+-
+
+G [C1 ,C2 ] jk (C )  & 9:=4BB ^ |jk (C )
+
+x - (C ) |  & B?024
+sp- (C ) | 
+-
+
+& B?443
+⌘
+
+jk (C ) |  & 9:=4BB
+
+(6)
+(7)
+(8)
+(9)
+
+Experiments
+
+3.4.2 Experimental Results. Fig. 4 shows the experimental results
+of the single-directional trust model. Trust values of attackers decrease when they perform acceleration attacks. Since our trust
+framework is aware of long-term history, if no record in H , the
+initial opinion about vehicle is set to {0, 0, 1, 0.5}, where uncertainty
+takes its maximum 1 to represent the fact that we don’t know anything (before trip 1). If a vehicle has no history and performs an
+attack in the beginning of its� rst trip, then its trust value decreases
+very fast, e.g., vehicle 1, 2, 3 in trip 1. If a vehicle has good history,
+and performs an attack or behaves dangerously, then its trust value
+also decreases but with relatively low rate, e.g., vehicle 9 in trip 5.
+This is because our framework calculates trustworthiness based on
+both long-term and short-term history. The longer a vehicle keeps
+
+2
+
+- and the resulting short-term trust/opinions are , - and , - .
+Then the short-term opinion about - reads:
+,-
+
+A
+
+3.4.1 Experiment Setup. We experiment with 10-vehicle platoons
+and there exists 0CC 2 [1, 2, 3] attacker(s) that are randomly located
+in the member vehicles. Attacker setup can be found in Supplementary Materials Section D.1. We test our trust-based attacker
+detection models (both single and bi-directional) with acceleration
+injection attacks. We generate synthetic acceleration data for member vehicles and evaluate trust opinions in real time. Evaluated
+trust values are saved in H for long-term record after each trip.
+
+A
+A
+A
+2 are , - , , 1 , and , 2 , respectively.
+2
+
+A
+
+Eq. 6 indicates that the reported inter-space of - from beacons, x - ,
+should not deviate from the requested 3 by more than & B?024 in
+time interval [C + C 1, C + C 2 ], where C 1 and C 2 are hyper parameters.
+Similarly, reported x - should not deviate from the sensed x - by
+more than & B?024 . Similar rules apply for speed sp- and the jerk
+value jk - , which we estimate by taking the di�erence between
+the accelerations values for the last and current beacons. High jerk
+values or abrupt change in acceleration are a safety risk [14].
+
+Figure 3: Trust-based attacker detection model with single and bidirectional trust evaluations.
+
+1
+
+[ A; ]
+
+simpli�ed version: , ,, - = (, ⌦ , - ) , - .
+We assume that in both single and bi-directional evaluations, the
+head vehicle’s predecessor is the trustworthy A.
+In fact, , - is evidence-based and now we present how to derive
+evidences. A vehicle gains accurate position and velocity information of its adjacent vehicles via sensors, and the reported information from beacons (of other vehicles). Therefore, vehicles as
+measure evidence using a set of rules to determine if the adjacent
+vehicle is trustworthy based on the assumption that the sensor data
+is always accurate. In what follows, we use i, k , and b to denote
+behavioral properties in an appropriate formalism such as Signal
+Temporal Logic (STL) [22]. For brevity, we omit a detailed explanation of STL; in our notation, (x - , C) |= i denotes that starting
+from time C, the behavior x - satis�es i, and (x - , C) |= G [C1 ,C2 ] i
+indicates that the formula i holds at all times between C + C 1 and
+C + C 2 . A set of platoon-speci�c rules determines positive (A ) and
+negative (B) evidence:
+
+A
+
+,(, ,) , - . This bi-directional trust evaluation takes information from both the vehicles that are right before
+and after the target vehicle as illustrated in Fig. 3. To reduce communication intensity, this trust evaluation can be downgraded to single
+directional as shown in the top half of Fig. 3. In single-directional
+trust evaluation, each vehicle is only evaluated by its direct predecessor . Hence, the opinion update equation of vehicle - takes a
+
+335
+
+Main Track
+
+AAMAS 2021, May 3-7, 2021, Online
+
+Figure 4: Single-directional attacker detection experimental results. A 10-vehicle platoon completes 6 trips. Assume in the� rst trip all vehicles
+are new to the trust system and do not have trust record. Their records in H start building from trip 1 and are used in the following trips. The
+sine waves are required accelerations, and the fuzzy parts are acceleration attacks performed by vehicles.
+
+Figure 5: Bi-directional attacker detection experimental results. A 10-vehicle platoon completes 2 adjacent trips and attackers 1, 2, and 3
+perform similar accelerations attacks. a. All vehicles do not have trust history in H. b. Only attacker vehicles have moderate histories in H
+with trust value 0.25. c. Only attacker vehicles have bad histories with trust value 0.05.
+
+a good record, the slower the penalty comes. On the contrary, when
+a vehicle with bad history behaves dangerously, its trust value will
+decrease by a large margin, e.g., vehicle 3 in trip 6.
+Fig. 5 shows results of the bi-directional trust model. Di�erent
+historical trust record of attackers results in di�erent trust values.
+When attackers with no or moderate histories perform attacks,
+the trust evaluations and degradation in Fig. 5a-b are similar in
+Fig. 4. When attackers with bad histories perform good in the
+current trip, they will gain trust slowly as shown in Fig. 5c. Note
+that the middle attacker V2 gains trust slower than V1 and V3
+because in our bi-directional trust model, V2’s evaluators are also
+untrustworthy, hence their evaluations are discounted by their own
+trustworthiness.
+
+3.5
+
+platoons. In addition, involving trustworthy RSUs is always helpful
+but costly. With the long-term trust history, vehicles can choose
+platoons controlled by more trustworthy head vehicles when joining and forming platoons, which is also a meaningful direction in
+platoon research. In this section we demonstrate the possibility and
+feasibility of our trust framework, and provide backbones for future
+works to build on. In the following sections, we will demonstrate
+how to use the calculated trust values in control policies.
+
+4
+
+TRUST-AWARE AUTONOMOUS
+INTERSECTION MANAGEMENT (AIM)
+4.1 AIM
+The intersection tra�c in AIM is a simpli�ed version of real-world
+intersection tra�c. Fig. 6a illustrates a four-way intersection example with three lanes in each road leading to the intersection area
+I (marked by the white dotted rectangle). A vehicle - 2 X on
+the road traveling to but not yet entering I is on the AIM map
+M. The operating procedure of AIM starts from - entering M
+and communicating with intersection manager (IM) A by sending a request W - , i.e., vehicle identi�cation number, vehicle size,
+predicted arrival time, velocity, acceleration, arrival and departure
+lanes. A then calculates the trajectory of - and makes a grant or
+reject decision and sends the decision back to - . A rejects W - if
+there is a con�ict in the simulated trajectories. If A approves W - ,
+
+Discussion
+
+Our attacker detection model combines long- and short-term trustworthiness history and takes distributed authorities’ own trustworthiness into consideration to enable detection of multiple attackers
+in platoons. One improvement could be di�erentiating the danger
+level of attackers by manipulating Eq. 6. A more dangerous behavior (e.g., a behavior leads to crash) should be penalized more than a
+less dangerous behavior. With this consideration, we will make the
+trust-based attacker detection be more comprehensive and e�cient
+in follow-up works, such as trust-aware distance control in CACC
+
+336
+
+Main Track
+
+AAMAS 2021, May 3-7, 2021, Online
+
+Figure 7: AIM-Trust framework. Combining AIM with RL bu�er adjustment agent results in AIM-RL. Adding trust authorities to AIMRL gives AIM-Trust.
+
+Figure 6: a. A four-way intersection. b. Space-time bu�er examples.
+Color-shaded areas represent the bu�ers for each vehicles. Trustworthy vehicles have tight bu�er since they are expected to follow the instructions with small error. Untrustworthy vehicles have
+large bu�er because it is highly likely that they would act di�erently than instructions. Dark red areas represent collision warning
+in simulated trajectories. In this case the vehicles will not be permitted to enter the intersection and their requests are rejected.
+
+de�ne our states as s t = (EC1, 4C1, @C1, ..., EC= , 4C= , @C= )) , where (EC8 , 4C8 , @C8 )
+are the vehicle identi�cation number, starting point, and requested
+destination of vehicle 8 2 [1, =] at time C. In each training time step C,
+vehicles pass through I and fully exit M. Within one episode, there
+are in total g steps, which represent that the = vehicles pass through
+g intersections. 88, C, (4C8 , @C8 ) are randomly generated by the simulator. The state transition equations for the environment are de�ned
+as: EC8 +1
+EC8 ; 4C8 +1, @C8 +1
+'0=3><(EC8 +1 ), where '0=3><(·) is the
+random starting point and destination generator in simulator.
+The action at time C is de�ned as a t = (0C1, 0C2, ..., 0=C )) , where
+08C is the bu�er size of vehicle 8 at time C. Neural network makes
+prediction by assessing the positions and request of each vehicle.
+
+- is responsible for following the instruction to enter and drive
+through I. In the case of rejection, - has to resend the request and
+wait for further instructions [12].
+Important assumptions that AIM makes are as follows. (i) For all
+- 2 X, they follow the instructions of A strictly with a range of
+error tolerance. This restriction guarantees safety by simulating the
+trajectories and rejecting the con�icted requests. (ii) For all - 2 X,
+they are all attached with a static bu�er size, which indicates the
+time-space reservation of the vehicle. The trajectories are de�ned
+as con�icted if the bu�ers of two vehicles are overlapped (marked
+as dark red in Fig. 6b, and the shaded area represents the bu�er of
+each vehicle). The larger the bu�er size, the higher the safety, and
+the lower the e�ciency or throughput. Note that in conventional
+AIM, all vehicles’ bu�er sizes are set to be 1 and this preserves the
+collision-free because of assumption (i). However, in real world
+scenarios, assumption (i) is invalid since some of the new drivers
+or even malicious autonomous agents would act recklessly and not
+follow the instructions. This leads to collisions in I and furthermore,
+small static bu�er size in assumption (ii) intensi�es the situation.
+
+4.2
+
+4.2.2 Reward Function. It is known that throughput is sensitive
+to bu�er size, i.e., large bu�er size harms throughput. However,
+large bu�er size leads to low collisions. Therefore, to operate the
+intersection with low collision rate and maintain throughput, the
+reward function is de�ned as:
+(
+1 + _(1C⌘ 08C ), if no collision,
+AC8 =
+(g 1) ⇤ [1 + _(1C⌘ 08C )], if collision happens,
+(10)
+where 1C⌘ is a hyper parameter indicating a reasonable upper bound
+bu�er size. _ is a hyper parameter to balance the collision and
+throughput. The vehicle is removed once it collides and not blocking
+I, and in next steps we put it back in M. A training episode contains
+g steps, and an episode ends once reach the maximum g step.
+
+RL-based AIM (AIM-RL)
+
+4.3
+
+In order to determine optimal bu�er sizes for trustworthy and untrustworthy agents to avoid collisions, we use RL to explore the
+unknown environment. In this section, we de�ne the RL formulation (deep Q-learning [24, 25]) including de�nitions of states,
+actions, and rewards, of our proposed RL-based AIM, AIM-RL. In
+deep Q-learning, the neural network is approximating a Q-learning
+table, where each entry in the table is updated by @(BC , 0C )
+@(BC , 0C ) + U [AC +1 + W max0 @(BC +1, 0) @(BC , 0C )] [10], where BC is
+state, 0C is action, AC +1 is reward calculated at AC +1 , U is learning
+rate, and W is discounting factor.
+
+Trust-aware RL-based AIM (AIM-Trust)
+
+In this section, we show how to apply our trust framework in AIM
+and build on AIM-RL to get our trust-aware framework, AIM-Trust.
+We assume that the IMs serve as the centralized trust manager
+A, and we have help from RSUs which serve as distributed trust
+authorities . RSUs cover the places between the intersections
+while IMs cover intersections. We enhance the AIM framework
+to be aware of trustworthiness of vehicles and use trust values
+when inferring the appropriate time-space reservations (bu�ers) of
+vehicles to reduce collision rate. AIM-Trust’s bu�er adjusting agent
+is similar to AIM-RL and the operation details are shown in Fig. 7.
+
+4.2.1 State Space, State Transition, and Action Space. We model a
+four-way intersection with three lanes in each direction as shown
+in Fig. 6a. To simulate the real world scenarios, we explicitly allow
+vehicles on each lane to either go straight, turn left or right. We
+
+4.3.1 Trust/Opinion Update. Before entering M, RSUs as distributed
+
+A
+,A
+, - . After entering M and before entering I, IM A inspects - ,
+
+update the opinion about - by cumulative fusion: , -
+
+337
+
+Main Track
+
+AAMAS 2021, May 3-7, 2021, Online
+
+observes evidence, and develops short-term opinion about - . Since
+A
+
+short-term , - is evaluated based on evidence, and to distinguish
+A
+
+A
+
+from long-term , - , we substitute short-term , - with notation
+
+UV
+20%
+40%
+60%
+80%
+100%
+
+⇢>
+
+, - (⇢> represents evidence observed outside I). Then the opinion about - is updated by combining with its long-term opinion:
+A
+
+A
+
+⇢>
+
+,, - , - . Before - entering I, - ’s trust value is sent to
+RL-based bu�er adjustment agent to calculate the trust-based dynamic bu�er. And then AIM control policy uses this dynamic bu�er
+size to determine whether to reject or accept - ’s request similarly
+in original AIM. After - exits I, the trust/opinion is updated again
+based on - ’s behaviors and collision status in I. Here, A inspects
+A
+
+⇢8
+
+,-
+
+A
+
+⇢>
+
+⇢8
+
+,- .,- ,,- ,
+
+and , - are evaluated by observations of - ’s behavior based on
+Eq. 1. Now we describe how to determine positive (B) and negative
+(A ) evidences. Similarly to Eq. 6, we use a set of AIM-speci�c rules
+to specify a driving behavior to be B or A . Before - approaches M,
+(RSUs) observe - and generate opinion , - . When - arrives M,
+AIM-Trust uses another set of rules to quantify evidences based on
+how well - follows instructions and collision status in I.
+
+4.4
+
+-
+
+i ⌘ G [C1 ,C2 ] ( |x (C )
+
+B = B + 1, otherwise,
+
+~ (C ) |  &),k ⌘ G [C1 ,C2 ] (sp- (C )  ˆ
+B?).
+-
+
+Experiments
+
+4.4.1 Experiment Setup. We consider in one RL training episode,
+= = 10 vehicles passing through g = 10 intersections and we
+monitor the collisions happened within these =g = 100 intersection
+crossing events as 2. For each intersection (or step) C in an episode, =
+vehicles enter and leave the intersection following randomly picked
+starting points, [4C0, 4C1, ..., 4C= ], and destinations, [@C0, @C1, ..., @C= ]. We
+compare AIM-Trust with the original AIM algorithm with� xed
+bu�er size 1, namely AIM-1, and AIM-RL. We insert 20-100% untrusted vehicles in tra�c to cause potential collisions. All simulations are done in the AIM simulator [1]. See Supplementary
+Materials Section D.2 for the selection of hyper-parameters and
+further experimental setup details. We train both AIM-Trust and
+AIM-RL 10 times and report the mean-variance results. In addition,
+we control the training process of AIM-RL and AIM-Trust to be the
+same to ensure fair comparison.
+
+4.3.2 Evidence Evaluation at Road Side Units. Suppose a RSU observes vehicle - ’s trajectory and velocity, and the desired behavior
+is de�ned by a set of rules, e.g., driving within one lane with negligible deviation and under the designated speed limit. Hence, we
+de�ne these properties formally as follows. Subject to - , suppose
+the true trajectory is x - , the requested (or predicted) trajectory is
+~- , the negligible deviation from ~- is &, the speed of the vehicle
+B?. We quantify A and B as:
+is sp- , and the designated speed limit is ˆ
+A = A + 1, if (x - , C ) |= i ^ (sp- , C ) |= k ;
+
+AIM-1
+64.00%
+82.85%
+79.37%
+83.84%
+89.28%
+
+Figure 8 & Table 1: Collision comparison between AIM-Trust, AIMRL and AIM-1. In-plot shows the cumulative reward of AIM-Trust
+with 20% untrusted vehicles in training. Table 1: Performance improvement of AIM-Trust compared to baselines. UV indicates the
+untrusted vehicle percentage.
+
+⇢8
+
+- ’s behavior in I and obtains an evidence-based opinion , - , then
+the opinion about - is updated as: , -
+
+AIM-RL
+51.35%
+50.00%
+64.44%
+18.18%
+71.69%
+
+(11)
+
+This equation indicates that the true trajectory of a vehicle should
+not deviate from the requested smooth trajectory by more than & in
+time interval [C +C 1, C +C 2 ], where C 1 and C 2 are hyper parameters. For
+a RSU, it predicts a smooth trajectory ~- to� t the true trajectory
+x - . For AIM-Trust, ~- is the requested and approved trajectory
+of - . In addition, the speed of a vehicle should never exceed the
+speed limit in time interval [C 1, C 2 ].
+
+4.4.2 Experimental Results. As shown in Fig. 8, RL-based AIM-RL
+and AIM-Trust decrease the collision numbers drastically compared
+to AIM-1 for two reasons: (i) AIM-1 cannot deal with untrusted
+vehicles and the small and� xed bu�er size results in high collision
+rate. (ii) AIM-Trust and AIM-RL takes collision numbers in reward
+function to penalize collision and allocate appropriate time-space
+bu�er intelligently for di�erent vehicles. Table 1 shows the average
+improvements of AIM-Trust in terms of percentage. Compared to
+non-trust AIM-RL, AIM-Trust decreases collisions by at least 19.18%
+and up to 71.69%. These results demonstrate the e�ectiveness of the
+proposed trustworthiness and trust framework in control policies.
+Since our formulation of RL reward function considers throughout, and higher throughput leads to lower safety, with Eq. 10, AIMTrust cannot guarantee collision-free due to the trade-o� between
+safety and throughput. To demonstrate that AIM-Trust can deduce
+appropriate bu�er sizes based on trustworthiness, we suppress
+the performance on throughput and let _ = 0 while giving big
+penalty ( 40) when collision happens. (See Supplementary Materials Section D.3 for detailed formulation.) It turns out AIM-Trust
+with revised reward function learns to select large bu�er sizes and
+achieves collision-free in all scenarios.
+
+4.3.3 Evidence Evaluation at M. When vehicles enter M before
+entering I, Eq. 11 is used to quantify evidences. If negative evidence
+observed, it means the vehicle violates the approved trajectory by
+an intolerable error. Once vehicles enter I, a new set of rules is
+used to take into account the honest status of vehicles and collisions
+in I: A = A + 1, if the vehicle follows the approved trajectory and
+no collision happens; otherwise B = B + 1.
+4.3.4 Trust-based RL Bu�er Adjustment Agent. We formulate RL
+of AIM-Trust similarly to AIM-RL, and add only trustworthiness of
+vehicles in state space: s t = (EC1, 4C1, ?C1, @C1, ..., EC= , 4C= , ?C= , @C= )) , where
+?C8 is 8’s trustworthiness at time C. With this minor modi�cation, we
+achieve trust-aware RL-based intersection management.
+
+338
+
+Main Track
+
+AAMAS 2021, May 3-7, 2021, Online
+
+5 TRUST-AWARE TRAFFIC LIGHT CONTROL
+5.1 RL-based Tra�c Light Control (TLC-RL)
+
+non-trust TLC-RL, TLC-Trust achieves lower collisions in all cases.
+In addition, TLC-Trust and TLC-RL are more advanced than traditional� xed-length TLC-Fix. Since the experimental setup in TLC
+and AIM case studies are similar, we compare TLC also with AIM
+methods. As shown in Fig. 8 and 9, AIM methods are much better
+at collision reduction compared to TLC methods, this is because
+AIM-Trust and AIM-RL are designed to do collision avoidance and
+allocate a trust-based space-time bu�er to each vehicle, whereas the
+tra�c light-based control policies are focusing on intersection e�ciency. To reduce collision rate of TLC-Trust, we can add penalties
+in reward function when collision happens. Besides these results,
+we also provide videos to demonstrate how TLC-Trust works in
+AIM intersection simulator: https://youtu.be/15heSQbWHtE.
+
+Conventional� xed-cycle tra�c light control (TLC) has many disadvantages, such as energy waste and long delays [20]. Many RL-based
+adaptive TLC frameworks have been proposed in recent years to
+take real-time tra�c information as input and adjust tra�c light
+dynamically [9, 20, 21, 29, 30]. Here, we use an example RL formulation of such problems following [20] and later we show how
+to make it trust-aware by a minimal modi�cation. We use deep
+Q-learning to dynamically control the tra�c light. Detailed RL
+formulation can be found in Supplementary Material Section D.4.
+
+5.2
+
+Trust-aware TLC (TLC-Trust)
+
+5.4
+
+With the assumption that there might be untrustworthy/malicious
+vehicles, trust evaluation is helpful for intersection management. To
+enable the tra�c light controller with trust information, we utilize
+our proposed trust framework where the centralized trust manager
+A maintains a trustworthiness table H . The trust framework for
+TLC is similar to AIM-Trust as described in Section 4.3.1. Note that
+distributed trust authorities, e.g., RSUs in tra�c systems, are not
+necessary in our trust framework, however, they can help A to
+enlarge the observation range and maintain an accurate H . With
+A, we have access to trustworthiness of vehicles. Hence, with a
+minimum modi�cation to the state space in RL formulation, i.e.,
+adding vehicles trustworthiness @C8 gives us TLC-Trust.
+
+5.3
+
+Discussion
+
+Trust-aware intersection management using tra�c signals shows
+better performance in terms of collision rate compared to the nontrust version. We envision that further advantages of trust-aware
+intersection management lie in cooperative intersection management where multiple adjacent intersections cooperate and control
+tra�c lights aware of dangerous and untrustworthy vehicles. In
+addition, emergency vehicles can bene�t from this setup since we
+can give priority through trust values.
+
+6
+
+CONCLUSION
+
+In this work we propose a general trust framework for MASs and
+demonstrate the feasibility and advantages by applying it to three
+di�erent systems. We show that with trust evaluations, the designed
+trust-based CACC platoon attacker detection model accurately detects attackers and the historical trust record can be further useful
+in future platoon formation and platoon control. In the intersection management case studies (AIM and TLC), we show that by
+embedding trust quanti�cation into decision-making algorithms,
+the coordination algorithms can balance safe coordination with
+system performance even in mixed trust settings. In particular, we
+show that the trust-aware versions of Autonomous Intersection
+Management (AIM-Trust) and Tra�c Light Control (TLC-Trust)
+outperform their trust-oblivious counterparts in terms of improving safety of the overall MAS. In future, we will consider applying
+the trust framework to broader classes of MAS algorithms such as
+those used for consensus and multi-agent path planning.
+
+Experiments
+
+5.3.1 Experiment Setup. In this case study, we compare TLC-RL
+and its trust-aware version, TLC-Trust. In addition, we also compare with conventional� xed-cycle tra�c light policy (TLC-Fix).
+Similarly in AIM experiments, we insert 20% 100% untrustworthy
+vehicles in the tra�c and we assume that untrustworthy vehicles
+may turn left even they are at right lane. In one episode, 100 vehicles pass through the intersection I and we use collision rate
+as evaluation metric. We run TLC-RL and TLC-Trust 10 times and
+report mean-variances to ensure fair comparison.
+
+ACKNOWLEDGMENTS
+The authors gratefully acknowledge the support by the National
+Science Foundation under the Career Award CPS/CNS-1453860,
+the NSF award under Grant Numbers CCF-1837131, MCB-1936775,
+CNS-1932620, and CMMI 1936624 and the DARPA Young Faculty
+Award and DARPA Director’s Fellowship Award, under Grant Number N66001-17-1-4044, a Northrop Grumman grant, and a grant
+from Toyota R&D North America. The views, opinions, and/or�ndings contained in this article are those of the authors and should not
+be interpreted as representing the o�cial views or policies, either
+expressed or implied by the Defense Advanced Research Projects
+Agency, the Department of Defense or the National Science Foundation.
+
+Figure 9: a. Collision comparison between TLC-Trust, TLC-RL and
+TLC-Fix. b. Mean collisions of TLC-Trust in 10 test cases, each test
+case runs 10 times to calculate the mean collision. TLC-Trust’s collision rates in test and training sets are consistent.
+
+5.3.2 Experimental Results. The collision comparison between TLCTrust, TLC-RL, and TLC-Fix is illustrated in Fig. 9. Compared to
+
+339
+
+Main Track
+
+AAMAS 2021, May 3-7, 2021, Online
+
+REFERENCES
+
+grand cooperative driving challenge. IEEE Transactions on Intelligent Transportation Systems 13, 3 (2012), 1008–1017.
+[16] Siyuan Gong, Anye Zhou, and Srinivas Peeta. 2019. Cooperative adaptive cruise
+control for a platoon of connected and autonomous vehicles considering dynamic
+information� ow topology. Transportation Research Record 2673, 10 (2019), 185–
+198.
+[17] V David Hopkin. 2017. Human factors in air tra�c control. CRC Press.
+[18] Audun Jøsang. 2016. Subjective logic. Springer.
+[19] Jakub Konečnỳ, Brendan McMahan, and Daniel Ramage. 2015. Federated optimization: Distributed optimization beyond the datacenter. arXiv preprint
+arXiv:1511.03575 (2015).
+[20] Xiaoyuan Liang, Xunsheng Du, Guiling Wang, and Zhu Han. 2019. A deep
+reinforcement learning network for tra�c light cycle control. IEEE Transactions
+on Vehicular Technology 68, 2 (2019), 1243–1253.
+[21] Weirong Liu, Gaorong Qin, Yun He, and Fei Jiang. 2017. Distributed cooperative
+reinforcement learning-based tra�c signal control that integrates V2X networks’
+dynamic clustering. IEEE transactions on vehicular technology 66, 10 (2017),
+8667–8681.
+[22] O. Maler and D. Nickovic. 2004. Monitoring Temporal Properties of Continuous
+Signals. In FORMATS/FTRTFT.
+[23] Vicente Milanés, Steven E Shladover, John Spring, Christopher Nowakowski,
+Hiroshi Kawazoe, and Masahide Nakamura. 2013. Cooperative adaptive cruise
+control in real tra�c situations. IEEE Transactions on intelligent transportation
+systems 15, 1 (2013), 296–305.
+[24] Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Alex Graves, Ioannis
+Antonoglou, Daan Wierstra, and Martin Riedmiller. 2013. Playing atari with deep
+reinforcement learning. arXiv preprint arXiv:1312.5602 (2013).
+[25] Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Andrei A Rusu, Joel Veness,
+Marc G Bellemare, Alex Graves, Martin Riedmiller, Andreas K Fidjeland, Georg
+Ostrovski, et al. 2015. Human-level control through deep reinforcement learning.
+nature 518, 7540 (2015), 529–533.
+[26] Muaz Niazi and Amir Hussain. 2011. Agent-based computing from multi-agent
+systems to agent-based models: a visual survey. Scientometrics 89, 2 (2011),
+479–499.
+[27] Guni Sharon and Peter Stone. 2017. A protocol for mixed autonomous and humanoperated vehicles at intersections. In International Conference on Autonomous
+Agents and Multiagent Systems. Springer, 151–167.
+[28] Rens van der Heijden, Thomas Lukaseder, and Frank Kargl. 2017. Analyzing
+attacks on cooperative adaptive cruise control (CACC). In 2017 IEEE Vehicular
+Networking Conference (VNC). IEEE, 45–52.
+[29] Elise Van der Pol and Frans A Oliehoek. 2016. Coordinated deep reinforcement
+learners for tra�c light control. Proceedings of Learning, Inference and Control of
+Multi-Agent Systems (at NIPS 2016) (2016).
+[30] Hua Wei, Guanjie Zheng, Huaxiu Yao, and Zhenhui Li. 2018. Intellilight: A
+reinforcement learning approach for intelligent tra�c light control. In Proceedings
+of the 24th ACM SIGKDD International Conference on Knowledge Discovery & Data
+Mining. 2496–2505.
+
+[1] [n.d.]. AIM4 1.0-SNAPSHOT API. http://www.cs.utexas.edu/~aim/aim4sim/aim4release-1.0.3/aim4-root/target/site/apidocs/index.html. Accessed: 2020-07-26.
+[2] Faisal Alkhateeb, Eslam Al Maghayreh, and Shadi Aljawarneh. 2010. A multi
+agent-based system for securing university campus: Design and architecture. In
+2010 International Conference on Intelligent Systems, Modelling and Simulation.
+IEEE, 75–79.
+[3] Mani Amoozadeh, Arun Raghuramu, Chen-Nee Chuah, Dipak Ghosal, H Michael
+Zhang, Je� Rowe, and Karl Levitt. 2015. Security vulnerabilities of connected
+vehicle streams and their impact on cooperative driving. IEEE Communications
+Magazine 53, 6 (2015), 126–132.
+[4] Tsz-Chiu Au, Neda Shahidi, and Peter Stone. 2011. Enforcing liveness in autonomous tra�c management. In Twenty-Fifth AAAI Conference on Arti�cial
+Intelligence.
+[5] Tsz-Chiu Au, Shun Zhang, and Peter Stone. 2015. Autonomous intersection management for semi-autonomous vehicles. In Routledge Handbook of Transportation.
+Routledge, 116–132.
+[6] Jakob Axelsson. 2016. Safety in vehicle platooning: A systematic literature review.
+IEEE Transactions on Intelligent Transportation Systems 18, 5 (2016), 1033–1045.
+[7] Eric K Butler, Anca A Chandra, Pawan R Chowdhary, Susanne M GlissmannHochstein, Thomas D Gri�n, Divyesh Jadav, Sunhwan Lee, and Hovey R Strong Jr.
+2017. Drone air tra�c control and� ight plan management. US Patent 9,852,642.
+[8] Mingxi Cheng, Shahin Nazarian, and Paul Bogdan. 2020. There Is Hope After
+All: Quantifying Opinion and Trustworthiness in Neural Networks. Frontiers in
+Arti�cial Intelligence 3 (2020), 54.
+[9] Denise de Oliveira, Ana LC Bazzan, Bruno Castro da Silva, Eduardo W Basso, Luis
+Nunes, Rosaldo Rossetti, Eugénio de Oliveira, Roberto da Silva, and Luis Lamb.
+2006. Reinforcement Learning based Control of Tra�c Lights in Non-stationary
+Environments: A Case Study in a Microscopic Simulator.. In EUMAS.
+[10] Avinash K Dixit, John JF Sherrerd, et al. 1990. Optimization in economic theory.
+Oxford University Press on Demand.
+[11] Kurt Dresner and Peter Stone. 2004. Multiagent tra�c management: A
+reservation-based intersection control mechanism. In Proceedings of the Third
+International Joint Conference on Autonomous Agents and Multiagent SystemsVolume 2. 530–537.
+[12] Kurt Dresner and Peter Stone. 2008. A multiagent approach to autonomous
+intersection management. Journal of arti�cial intelligence research 31 (2008),
+591–656.
+[13] Bill Fleming. 2011. New Innovative ICs [Automotive Electronics]. IEEE Vehicular
+Technology Magazine 6, 2 (2011), 4–8.
+[14] Keno Garlichs, Alexander Willecke, Martin Wegner, and Lars C Wolf. 2019. TriP:
+Misbehavior Detection for Dynamic Platoons using Trust. In 2019 IEEE Intelligent
+Transportation Systems Conference (ITSC). IEEE, 455–460.
+[15] Andreas Geiger, Martin Lauer, Frank Moosmann, Benjamin Ranft, Holger Rapp,
+Christoph Stiller, and Julius Ziegler. 2012. Team AnnieWAY’s entry to the 2011
+
+340
+
+

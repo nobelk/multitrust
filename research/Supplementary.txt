@@ -1,0 +1,311 @@
+SUPPLEMENTARY MATERIALS FOR
+SUBMISSION 707
+A CUMULATIVE FUSION
+
+⌫ < 0:
+these two opinions is calculated as follows, For D- < 0 or D1 D ⌫ +1 ⌫ D
+⇧⌫
+8
+>
+1- = - - -⌫ - ,
+>
+>
+D- +D>
+>
+>
+3 D ⌫ +3 ⌫ D
+>
+⇧⌫
+>
+<3- = - - -⌫ - ,
+>
+
+Based on [18], suppose we have two opinions, - = {1- , 3- , D- , 0- }
+
+D- +D-
+
+⌫
+
+2D D ⌫
+>
+⇧⌫
+>
+>
+D- = - -⌫ ,
+>
+D
+>
+- +D>
+>
+⌫
+>
+>0 ⇧⌫ = 0- +0- .
+: 2
+
+⌫ , 3 ⌫ , D ⌫ , 0 ⌫ }. The cumulative fusion, i.e., the comand , - = {1- - ⇧⌫
+
+bined opinion, , - of these two opinions is calculated as follows,
+⌫ < 0:
+For D- < 0 or D8
+1 D ⌫ +1 ⌫ D
+>
+>
+1- ⇧⌫ = - -⌫ - -⌫ ,
+>
+D
+>
+- +D- D- D>
+>
+⌫ +3 ⌫ D
+>
+3- D>
+⇧⌫
+- >
+3- =
+>
+⌫
+⌫ ,
+>
+D
++D
+>
+- D- D<
+>
+⌫
+D
+D
+- D- ⇧⌫ =
+⌫ D D⌫ ,
+>
+D- +D>
+- >
+⌫
+>
+0
+D
++0⌫ D (0 +0⌫ )D D ⌫
+>
+⌫ < 1,
+>
+0- ⇧⌫ = - - - -⌫ - ⌫- - - if D- < 1 and D>
+>
+D- +D- 2D- D>
+>
+⌫
+>
+>
+>0 ⇧⌫ = 0- +0- if D = D ⌫ = 1.
+2
+: -
+
+⌫ = 0:
+For D- = D-
+
+⌫,
+8
+1- ⇧⌫ = W- 1- + W-⌫ 1>
+>
+>
+>
+<3 ⇧⌫ = W 3 + W ⌫ 3 ⌫ ,
+>
+-
+
+- -
+
+where W- = ;8<D !0,D ⌫ !0 =
+-
+
+-
+
+D⌫ .
+D- +D-
+
+B
+
+⌫ = 0, averaging fusion operates the same as cumulative
+For D- = Dfusion as in Eq. 13.
+
+D
+
+EXPERIMENT SETUP AND ADDITIONAL
+RESULTS IN AIM EXPERIMENTS
+D.1 CACC Attacker Model Setup
+(12)
+
+(13)
+
+- -
+
+>
+D- ⇧⌫ = 0,
+>
+>
+>
+>0 ⇧⌫ = W 0 + W ⌫ 0⌫ ,
+: - - -
+
+⌫
+D⌫
+⌫ , and W- = ;8<D !0,D ⌫ !0 =
+D- +D-
+
+DISCOUNTING OPERATOR
+
+Based on [18], suppose we have two opinions, ⌫ = {1 ⌫ , 3⌫ , D⌫ , 0⌫ }
+⌫
+
+⌫ , 3 ⌫ , D ⌫ , 0 ⌫ }. The discounting operator combines
+and , - = {1- - ’s trust in , and ⌫’s opinion about - . Then to derive ’s opinion
+about - , the discounting operator is used:
+[ ;⌫ ]
+8
+⌫,
+>
+1= ? ⌫ 1>
+>
+>
+[ ;⌫ ]
+>
+<
+>
+= ? ⌫ 3-⌫
+[ ;⌫ ]
+⌫ 3
+,= , ⌫ ⌦ , - . -[ ;⌫ ]
+⌫
+>
+D= 1 ? ⌫ 1>
+>
+>
+>
+>0 [ ;⌫ ] = 0⌫ ,
+: -
+
+? ⌫ 3-⌫ ,
+
+(14)
+
+Lemma B.1. If A fully trusts on evidence collection and opinion/trust evaluation, i.e., 1 A = 1, the discounting equation reads:
+[ A; ]
+
+C
+
+=,
+
+A
+
+In single-directional trust model experiments, we complete 6 continuous trips and in each trip, 0CC and attacking time period are
+di�erent. In trip 1 and 2, vehicle 1, 2, 3 are attackers; in trip 3 and
+4, vehicle 3, 6 are attackers; in trip 5, vehicle 9 is attacker and in
+trip 6, vehicle 3 is attacker again. In bi-directional model experiments, we complete 3 sets of trips and each contains 2 continuous
+trips. 0CC = [1, 2, 3] in all trips and the attacking time periods are
+similar as well. We set attackers’ trust histories in these 3 sets to be
+{0, 0, 1, 0.5}, {0, 0.5, 0.5, 0.5}, and {0, 0.99, 0.01, 0.5}, to represent no,
+moderate, and bad history.
+
+D.2
+
+⌦,- =,-.
+
+AVERAGING FUSION
+
+Based on [18], suppose we have two opinions, - = {1- , 3- , D- , 0- }
+
+Hyper Parameters in AIM-Trust and
+AIM-RL
+
+1C⌘ is a hyper parameter indicating a reasonable bu�er size. We aim
+to �nd appropriate bu�er sizes to decrease the collision rate and
+increase the throughput of the intersection. In our experiment, we
+let 1C⌘ take values 10, 12, 12, 20, 20 when the untrusted vehicle percentage is 20%, 40%, 60%, 80%, 100% respectively. The architecture
+of our neural network contains four layers with 4 neurons input
+layer, 17 neurons in output layer, and both hidden layers have 32
+neurons and take ReLU activation function. The action space (bu�er
+size) ranges from 0-16 in cases with 20%, 40%, and 60% untrusted
+vehicles, and 5-21 in cases with 80%, and 100% untrusted vehicles.
+We set the learning rate U = 0.001, discounting factor W = 0.9, and
+balancing factor _ = 0.2.
+
+D.3
+
+where ? ⌫ = 1 ⌫ + D⌫ 0⌫ is the trustworthiness of ⌫ from ’s aspect.
+
+,-
+
+Collision-free AIM-Trust
+
+In this experiment, we modify the reward function of AIM-Trust
+as as shown in Eq. 16, and let RL agent choose bu�er size in
+range 0 to 26. AIM-Trust learns to choose larger bu�er sizes to
+achieve collision-free in training and on average, the resulting
+bu�er sizes in cases with 20% to 100% untrustworthy vehicles are
+[14.4, 14, 14.4, 20, 24]. In comparison, with same reward function,
+AIM-RL also learns to avoid collision completely, but with higher
+bu�er sizes [14, 15, 16, 20, 26] which lead to lower throughput.
+
+⌫
+
+⌫ , 3 ⌫ , D ⌫ , 0 ⌫ }, which are observed in the same time
+and , - = {1- - -
+
+period. The average fusion, i.e., the averaged opinion, , -
+
+(15)
+
+⇧⌫
+
+of
+
+AC8 =
+
+(
+
+1, if no collision,
+40, if collision happens.
+
+(16)
+
+D.4
+
+RL Formulation of TLC-RL
+
+D.5
+
+Hyper Parameters in TLC-Trust and
+
+TLC-RL
+D.4.1 State Space and Action Space of TLC-RL. Similarly to the previous RL formulation in AIM, we model a four-way intersection. The
+We keep RL formulations and training procedures of TLC-RL and
+states are de�ned as s t = (?>B8C8>=C1, B?443C1, ..., ?>B8C8>==C , B?443C= )) ,
+TLC-Trust the same (except that TLC-Trust has trust in state space)
+where = represents the number of vehicles appeared in the map M
+to ensure fair comparison. The convolutional neural network archi),
+at time C. The action at time C is de�ned as a t = (0=>AC⌘
+, 0B>DC⌘
+, 040BC
+, 0CF4BC )tecture
+of our deep Q-network is as follows: IN-Conv32-Conv64C
+C
+C
+where 08C is the tra�c light status of direction 8. Note that each diConv128-MaxPooling-FC64-OUT, where the IN and OUT represent
+rection has three lanes (turn left, go straight, and turn right) and
+input and output layer. ReLU activation function is placed in every
+the tra�c signal is the same for lanes in the same direction.
+convolutional and fully-connected layer. We set the learning rate
+U = 0.001, discounting factor W = 0.99,
+D.4.2 Reward Function of TLC-RL. To maximize the throughput
+and e�ciency of intersections, we reward the RL agent if the cuE DEMONSTRATION VIDEOS AND CODES
+mulative waiting time of all vehicles waiting before an intersection
+In Supplementary Materials folder, we include demonstration videos
+I decreases compared to the previous time step, otherwise we
+of AIM-1, AIM-RL, AIM-Trust (collision-free), TLC-Fix, TLC-RL,
+penalize the RL agent. Therefore, the reward function is de�ned
+Õ=
+8
+TLC-Trust
+along with their codes and ‘readme’ �les.
+as follows: AC = ,C ,C +1 , where ,C = 8=1 FC represents the
+cumulative waiting time of all vehicles at time C.
+
+

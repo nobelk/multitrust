@@ -8,6 +8,31 @@ authors = [
     { name = "Dr. Nobel Khandaker", email = "nobel@outlook.com" }
 ]
 requires-python = ">=3.10"
+keywords = [
+    "trust",
+    "multi-agent",
+    "subjective-logic",
+    "agents",
+    "ai-safety",
+    "trust-framework",
+    "llm",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+    "Operating System :: OS Independent",
+    "Framework :: AsyncIO",
+]
 dependencies = []
 
 [project.optional-dependencies]
@@ -33,8 +58,12 @@ dev = [
     "mypy>=1.10",
 ]
 
-[project.scripts]
-multitrust = "multitrust:main"
+[project.urls]
+Homepage = "https://github.com/nobelk/multitrust"
+Repository = "https://github.com/nobelk/multitrust"
+Documentation = "https://github.com/nobelk/multitrust#readme"
+Changelog = "https://github.com/nobelk/multitrust/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/nobelk/multitrust/issues"
 
 [build-system]
 requires = ["hatchling"]
@@ -42,6 +71,33 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/multitrust"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.claude",
+    "/.github",
+    "/.hypothesis",
+    "/.mypy_cache",
+    "/.pytest_cache",
+    "/.ruff_cache",
+    "/.venv",
+    "/.omc",
+    "/.omx",
+    "/dist",
+    "/state",
+    "/doc",
+    "/examples",
+    "/research",
+    "coverage.xml",
+    ".coverage",
+    ".env-sample",
+    ".python-version",
+    "uv.lock",
+    "example.md",
+    "improvement_plan.md",
+    "CLAUDE.md",
+    "COMPATIBILITY.md",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
