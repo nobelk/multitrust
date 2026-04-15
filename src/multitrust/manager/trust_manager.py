@@ -28,6 +28,16 @@ from multitrust.observability.events import (
     TrustThresholdCrossedEvent,
     TrustUpdatedEvent,
 )
+from multitrust.observability.tracing import (
+    SPAN_APPLY_DECAY,
+    SPAN_EXPLAIN_TRUST,
+    SPAN_GET_TRUST,
+    SPAN_IS_TRUSTED,
+    SPAN_MERGE_AUTHORITIES,
+    SPAN_RANK_AGENTS,
+    SPAN_SUBMIT_EVIDENCE,
+    trust_span,
+)
 from multitrust.operators.decay import time_decay
 from multitrust.operators.discount import discount_opinion
 from multitrust.operators.fusion import cumulative_fusion, multi_source_averaging_fusion
@@ -122,7 +132,18 @@ class TrustManager:
         return await self._store.get(agent_id)
 
     async def submit_evidence(self, evidence: Evidence) -> TrustRecord:
-        with self._acquire_thread_lock():
+        with (
+            trust_span(
+                SPAN_SUBMIT_EVIDENCE,
+                {
+                    "gen_ai.trust.agent_id": evidence.agent_id,
+                    "gen_ai.trust.authority_id": evidence.authority_id,
+                    "gen_ai.trust.evidence.positive": evidence.positive,
+                    "gen_ai.trust.evidence.negative": evidence.negative,
+                },
+            ) as span,
+            self._acquire_thread_lock(),
+        ):
             async with self._asyncio_lock:
                 if self._on_evidence_submitted is not None:
                     self._on_evidence_submitted(evidence)
@@ -186,6 +207,12 @@ class TrustManager:
                         new_trust=record.trustworthiness,
                     )
                 )
+
+                if span is not None:
+                    span.set_attribute("gen_ai.trust.old_score", old_trust)
+                    span.set_attribute("gen_ai.trust.new_score", record.trustworthiness)
+                    span.set_attribute("gen_ai.trust.evidence.count", record.evidence_count)
+
                 threshold = self._config.trust_threshold
                 if old_trust < threshold <= record.trustworthiness:
                     await self._emit(
@@ -225,7 +252,16 @@ class TrustManager:
         Each tuple is (authority_opinion_about_authority, authority_opinion_about_agent).
         Applies discount_opinion then multi_source_averaging_fusion.
         """
-        with self._acquire_thread_lock():
+        with (
+            trust_span(
+                SPAN_MERGE_AUTHORITIES,
+                {
+                    "gen_ai.trust.agent_id": agent_id,
+                    "gen_ai.trust.authority_count": len(authority_opinions),
+                },
+            ) as span,
+            self._acquire_thread_lock(),
+        ):
             async with self._asyncio_lock:
                 record = await self._store.get(agent_id)
                 if record is None:
@@ -257,6 +293,10 @@ class TrustManager:
                         new_trust=record.trustworthiness,
                     )
                 )
+
+                if span is not None:
+                    span.set_attribute("gen_ai.trust.old_score", old_trust)
+                    span.set_attribute("gen_ai.trust.new_score", record.trustworthiness)
 
                 return record
 
@@ -342,198 +382,235 @@ class TrustManager:
         """
         from multitrust.manager.policy import TrustPolicy
 
-        record = await self._store.get(agent_id)
-        if record is None:
-            raise AgentNotFoundError(f"Agent '{agent_id}' not found")
+        with trust_span(
+            SPAN_EXPLAIN_TRUST,
+            {"gen_ai.trust.agent_id": agent_id},
+        ) as explain_span:
+            record = await self._store.get(agent_id)
+            if record is None:
+                raise AgentNotFoundError(f"Agent '{agent_id}' not found")
 
-        now = time.time()
-        opinion = record.opinion
-        trust_score = opinion.trustworthiness
-        policy = TrustPolicy()
-        trust_level = policy.classify(trust_score)
+            now = time.time()
+            opinion = record.opinion
+            trust_score = opinion.trustworthiness
+            policy = TrustPolicy()
+            trust_level = policy.classify(trust_score)
 
-        limitations: list[str] = []
+            limitations: list[str] = []
 
-        # --- 1. Projected trust ---
-        half_life = self._config.decay_half_life_seconds
-        horizons = projection_horizons or [float(h[0]) for h in self._DEFAULT_HORIZONS]
-        horizon_labels: dict[float, str] = (
-            {float(h[0]): h[1] for h in self._DEFAULT_HORIZONS}
-            if projection_horizons is None
-            else {}
-        )
-        projections: list[TrustProjection] = []
-        for secs in horizons:
-            label = horizon_labels.get(secs, _format_horizon(secs))
-            proj_opinion = time_decay(opinion, secs, half_life)
-            projections.append(
-                TrustProjection(
-                    horizon_label=label,
-                    elapsed_seconds=secs,
-                    projected_opinion=proj_opinion,
-                    projected_trust=proj_opinion.trustworthiness,
-                )
+            # --- 1. Projected trust ---
+            half_life = self._config.decay_half_life_seconds
+            horizons = projection_horizons or [float(h[0]) for h in self._DEFAULT_HORIZONS]
+            horizon_labels: dict[float, str] = (
+                {float(h[0]): h[1] for h in self._DEFAULT_HORIZONS}
+                if projection_horizons is None
+                else {}
             )
-
-        # --- 2. Authority attribution ---
-        top_contributors: list[EvidenceContribution] = []
-        if self._evidence_ledger is not None:
-            entries = await self._evidence_ledger.query(agent_id)
-            # Group by (authority_id, rule_name)
-            groups: dict[tuple[str, str | None], list[EvidenceLedgerEntry]] = {}
-            for e in entries:
-                key = (e.authority_id, e.rule_name)
-                groups.setdefault(key, []).append(e)
-
-            contributions: list[EvidenceContribution] = []
-            base_rate = self._config.default_base_rate
-            for (auth_id, rule_name), group_entries in groups.items():
-                pos = sum(e.positive for e in group_entries)
-                neg = sum(e.negative for e in group_entries)
-                count = len(group_entries)
-                last_ts = max(e.timestamp for e in group_entries)
-                # Heuristic impact: net evidence mapped through trustworthiness formula
-                total = pos + neg
-                group_trust = pos / total if total > 0 else base_rate
-                impact = group_trust - base_rate
-                contributions.append(
-                    EvidenceContribution(
-                        authority_id=auth_id,
-                        rule_name=rule_name,
-                        positive_total=pos,
-                        negative_total=neg,
-                        evidence_count=count,
-                        last_submitted=last_ts,
-                        impact_score=impact,
-                        impact_method="heuristic",
+            projections: list[TrustProjection] = []
+            for secs in horizons:
+                label = horizon_labels.get(secs, _format_horizon(secs))
+                proj_opinion = time_decay(opinion, secs, half_life)
+                projections.append(
+                    TrustProjection(
+                        horizon_label=label,
+                        elapsed_seconds=secs,
+                        projected_opinion=proj_opinion,
+                        projected_trust=proj_opinion.trustworthiness,
                     )
                 )
 
-            contributions.sort(key=lambda c: abs(c.impact_score), reverse=True)
-            top_contributors = contributions[:top_k_contributors]
+            # --- 2. Authority attribution ---
+            top_contributors: list[EvidenceContribution] = []
+            if self._evidence_ledger is not None:
+                entries = await self._evidence_ledger.query(agent_id)
+                # Group by (authority_id, rule_name)
+                groups: dict[tuple[str, str | None], list[EvidenceLedgerEntry]] = {}
+                for e in entries:
+                    key = (e.authority_id, e.rule_name)
+                    groups.setdefault(key, []).append(e)
 
-            summary_data = await self._evidence_ledger.summary(agent_id)
-            evidence_summary = EvidenceSummary(
-                total_evidence_count=summary_data["total_evidence_count"],
-                total_positive=summary_data["total_positive"],
-                total_negative=summary_data["total_negative"],
-                distinct_authorities=summary_data["distinct_authorities"],
-                distinct_rules=summary_data["distinct_rules"],
-                earliest_evidence=summary_data["earliest_evidence"],
-                latest_evidence=summary_data["latest_evidence"],
-            )
+                contributions: list[EvidenceContribution] = []
+                base_rate = self._config.default_base_rate
+                for (auth_id, rule_name), group_entries in groups.items():
+                    pos = sum(e.positive for e in group_entries)
+                    neg = sum(e.negative for e in group_entries)
+                    count = len(group_entries)
+                    last_ts = max(e.timestamp for e in group_entries)
+                    # Heuristic impact: net evidence mapped through trustworthiness formula
+                    total = pos + neg
+                    group_trust = pos / total if total > 0 else base_rate
+                    impact = group_trust - base_rate
+                    contributions.append(
+                        EvidenceContribution(
+                            authority_id=auth_id,
+                            rule_name=rule_name,
+                            positive_total=pos,
+                            negative_total=neg,
+                            evidence_count=count,
+                            last_submitted=last_ts,
+                            impact_score=impact,
+                            impact_method="heuristic",
+                        )
+                    )
 
-            # Check if eviction is active
-            if hasattr(self._evidence_ledger, "is_evicting") and self._evidence_ledger.is_evicting:
+                contributions.sort(key=lambda c: abs(c.impact_score), reverse=True)
+                top_contributors = contributions[:top_k_contributors]
+
+                summary_data = await self._evidence_ledger.summary(agent_id)
+                evidence_summary = EvidenceSummary(
+                    total_evidence_count=summary_data["total_evidence_count"],
+                    total_positive=summary_data["total_positive"],
+                    total_negative=summary_data["total_negative"],
+                    distinct_authorities=summary_data["distinct_authorities"],
+                    distinct_rules=summary_data["distinct_rules"],
+                    earliest_evidence=summary_data["earliest_evidence"],
+                    latest_evidence=summary_data["latest_evidence"],
+                )
+
+                # Check if eviction is active
+                if (
+                    hasattr(self._evidence_ledger, "is_evicting")
+                    and self._evidence_ledger.is_evicting
+                ):
+                    limitations.append(
+                        "Evidence ledger uses bounded storage; "
+                        "attribution is windowed, not lifetime-complete"
+                    )
+            else:
                 limitations.append(
-                    "Evidence ledger uses bounded storage; "
-                    "attribution is windowed, not lifetime-complete"
+                    "No evidence ledger configured; authority/rule attribution unavailable"
                 )
-        else:
-            limitations.append(
-                "No evidence ledger configured; authority/rule attribution unavailable"
-            )
-            evidence_summary = EvidenceSummary(
-                total_evidence_count=record.evidence_count,
-                total_positive=record.positive_total,
-                total_negative=record.negative_total,
-                distinct_authorities=0,
-                distinct_rules=0,
-                earliest_evidence=record.created_at,
-                latest_evidence=record.updated_at,
-            )
-
-        # --- 3. Decay info ---
-        elapsed = now - record.updated_at
-        decay_enabled = self._config.enable_time_decay
-        if decay_enabled and half_life > 0:
-            decay_factor = math.exp(-math.log(2) * elapsed / half_life)
-            decayed_opinion = time_decay(opinion, elapsed, half_life)
-        else:
-            decay_factor = 1.0
-            decayed_opinion = opinion
-        decay_info = DecayInfo(
-            enabled=decay_enabled,
-            half_life_seconds=half_life,
-            seconds_since_last_update=elapsed,
-            current_decay_factor=decay_factor,
-            opinion_if_decayed_now=decayed_opinion,
-            trust_if_decayed_now=decayed_opinion.trustworthiness,
-        )
-
-        # --- 4. Decision explanation ---
-        effective_threshold = threshold if threshold is not None else self._config.trust_threshold
-        margin = trust_score - effective_threshold
-        action = "allow" if margin >= 0 else "block"
-        # Estimate evidence needed to cross threshold (for simple threshold policy)
-        evidence_needed: float | None = None
-        if margin < 0:
-            # Approximate: how much positive evidence would shift trust above threshold
-            W = self._config.default_prior_weight
-            u = opinion.uncertainty
-            if u > 1e-10:
-                # delta_trust ≈ delta_belief ≈ (delta_r / (r+s+W+delta_r)) * (1 - base_rate_effect)
-                # Simplified: need enough positive evidence to raise trustworthiness by |margin|
-                denom = 1.0 - opinion.base_rate * u
-                needed = (
-                    abs(margin) * (record.positive_total + record.negative_total + W) / denom
-                    if denom > 1e-10
-                    else None
+                evidence_summary = EvidenceSummary(
+                    total_evidence_count=record.evidence_count,
+                    total_positive=record.positive_total,
+                    total_negative=record.negative_total,
+                    distinct_authorities=0,
+                    distinct_rules=0,
+                    earliest_evidence=record.created_at,
+                    latest_evidence=record.updated_at,
                 )
-                evidence_needed = max(0.0, needed) if needed is not None else None
 
-        decision = DecisionExplanation(
-            action=action,
-            basis="threshold",
-            threshold=effective_threshold,
-            trust_score=trust_score,
-            margin=margin,
-            policy_name="TrustManager.is_trusted",
-            evidence_needed=evidence_needed,
-        )
+            # --- 3. Decay info ---
+            elapsed = now - record.updated_at
+            decay_enabled = self._config.enable_time_decay
+            if decay_enabled and half_life > 0:
+                decay_factor = math.exp(-math.log(2) * elapsed / half_life)
+                decayed_opinion = time_decay(opinion, elapsed, half_life)
+            else:
+                decay_factor = 1.0
+                decayed_opinion = opinion
+            decay_info = DecayInfo(
+                enabled=decay_enabled,
+                half_life_seconds=half_life,
+                seconds_since_last_update=elapsed,
+                current_decay_factor=decay_factor,
+                opinion_if_decayed_now=decayed_opinion,
+                trust_if_decayed_now=decayed_opinion.trustworthiness,
+            )
 
-        # --- Determine completeness ---
-        completeness = "partial" if limitations else "full"
+            # --- 4. Decision explanation ---
+            effective_threshold = (
+                threshold if threshold is not None else self._config.trust_threshold
+            )
+            margin = trust_score - effective_threshold
+            action = "allow" if margin >= 0 else "block"
+            # Estimate evidence needed to cross threshold (for simple threshold policy)
+            evidence_needed: float | None = None
+            if margin < 0:
+                # Approximate: how much positive evidence would shift trust above threshold
+                W = self._config.default_prior_weight
+                u = opinion.uncertainty
+                if u > 1e-10:
+                    denom = 1.0 - opinion.base_rate * u
+                    needed = (
+                        abs(margin) * (record.positive_total + record.negative_total + W) / denom
+                        if denom > 1e-10
+                        else None
+                    )
+                    evidence_needed = max(0.0, needed) if needed is not None else None
 
-        return TrustExplanation(
-            agent_id=agent_id,
-            timestamp=now,
-            completeness=completeness,
-            limitations=limitations,
-            opinion=opinion,
-            trust_score=trust_score,
-            trust_level=trust_level,
-            projected_trust=projections,
-            top_contributors=top_contributors,
-            evidence_summary=evidence_summary,
-            decay=decay_info,
-            decision=decision,
-        )
+            decision = DecisionExplanation(
+                action=action,
+                basis="threshold",
+                threshold=effective_threshold,
+                trust_score=trust_score,
+                margin=margin,
+                policy_name="TrustManager.is_trusted",
+                evidence_needed=evidence_needed,
+            )
+
+            # --- Determine completeness ---
+            completeness = "partial" if limitations else "full"
+
+            if explain_span is not None:
+                explain_span.set_attribute("gen_ai.trust.score", trust_score)
+                explain_span.set_attribute("gen_ai.trust.level", trust_level)
+                explain_span.set_attribute("gen_ai.trust.decision", action)
+                explain_span.set_attribute("gen_ai.trust.completeness", completeness)
+
+            return TrustExplanation(
+                agent_id=agent_id,
+                timestamp=now,
+                completeness=completeness,
+                limitations=limitations,
+                opinion=opinion,
+                trust_score=trust_score,
+                trust_level=trust_level,
+                projected_trust=projections,
+                top_contributors=top_contributors,
+                evidence_summary=evidence_summary,
+                decay=decay_info,
+                decision=decision,
+            )
 
     async def get_trust(self, agent_id: str) -> float:
-        record = await self._store.get(agent_id)
-        if record is None:
-            raise AgentNotFoundError(f"Agent '{agent_id}' not found")
-        return record.trustworthiness
+        with trust_span(
+            SPAN_GET_TRUST,
+            {"gen_ai.trust.agent_id": agent_id},
+        ) as span:
+            record = await self._store.get(agent_id)
+            if record is None:
+                raise AgentNotFoundError(f"Agent '{agent_id}' not found")
+            score = record.trustworthiness
+            if span is not None:
+                span.set_attribute("gen_ai.trust.score", score)
+            return score
 
     async def is_trusted(self, agent_id: str, *, threshold: float | None = None) -> bool:
         t = threshold if threshold is not None else self._config.trust_threshold
-        try:
-            trust = await self.get_trust(agent_id)
-            return trust >= t
-        except AgentNotFoundError:
-            return False
+        with trust_span(
+            SPAN_IS_TRUSTED,
+            {
+                "gen_ai.trust.agent_id": agent_id,
+                "gen_ai.trust.threshold": t,
+            },
+        ) as span:
+            try:
+                trust = await self.get_trust(agent_id)
+                trusted = trust >= t
+                if span is not None:
+                    span.set_attribute("gen_ai.trust.score", trust)
+                    span.set_attribute("gen_ai.trust.decision", "allow" if trusted else "block")
+                return trusted
+            except AgentNotFoundError:
+                if span is not None:
+                    span.set_attribute("gen_ai.trust.decision", "block")
+                    span.set_attribute("gen_ai.trust.agent_found", False)
+                return False
 
     async def rank_agents(self, agent_ids: list[str] | None = None) -> list[tuple[str, float]]:
-        if agent_ids is None:
-            agent_ids = await self._store.list_agents()
-        results = []
-        for aid in agent_ids:
-            record = await self._store.get(aid)
-            if record is not None:
-                results.append((aid, record.trustworthiness))
-        results.sort(key=lambda x: x[1], reverse=True)
-        return results
+        with trust_span(SPAN_RANK_AGENTS) as span:
+            if agent_ids is None:
+                agent_ids = await self._store.list_agents()
+            results = []
+            for aid in agent_ids:
+                record = await self._store.get(aid)
+                if record is not None:
+                    results.append((aid, record.trustworthiness))
+            results.sort(key=lambda x: x[1], reverse=True)
+            if span is not None:
+                span.set_attribute("gen_ai.trust.agent_count", len(results))
+            return results
 
     async def register_authority(
         self, authority_id: str, *, is_trusted: bool = False
@@ -546,38 +623,42 @@ class TrustManager:
             return await self._store.delete(agent_id)
 
     async def apply_decay(self, half_life_seconds: float | None = None) -> int:
-        if half_life_seconds is None and not self._config.enable_time_decay:
-            return 0
-        hl = (
-            half_life_seconds
-            if half_life_seconds is not None
-            else self._config.decay_half_life_seconds
-        )
-        agent_ids = await self._store.list_agents()
-        count = 0
-        now = time.time()
-        for agent_id in agent_ids:
-            with self._acquire_thread_lock():
-                async with self._asyncio_lock:
-                    record = await self._store.get(agent_id)
-                    if record is None:
-                        continue
-                    old_trust = record.trustworthiness
-                    elapsed = now - record.updated_at
-                    decayed = time_decay(record.opinion, elapsed, hl)
-                    record.opinion = decayed
-                    record.updated_at = now
-                    await self._store.put(record)
-                    count += 1
-                    await self._emit(
-                        TrustUpdatedEvent(
-                            event_type="trust_updated",
-                            agent_id=agent_id,
-                            old_trust=old_trust,
-                            new_trust=record.trustworthiness,
+        with trust_span(SPAN_APPLY_DECAY) as span:
+            if half_life_seconds is None and not self._config.enable_time_decay:
+                return 0
+            hl = (
+                half_life_seconds
+                if half_life_seconds is not None
+                else self._config.decay_half_life_seconds
+            )
+            agent_ids = await self._store.list_agents()
+            count = 0
+            now = time.time()
+            for agent_id in agent_ids:
+                with self._acquire_thread_lock():
+                    async with self._asyncio_lock:
+                        record = await self._store.get(agent_id)
+                        if record is None:
+                            continue
+                        old_trust = record.trustworthiness
+                        elapsed = now - record.updated_at
+                        decayed = time_decay(record.opinion, elapsed, hl)
+                        record.opinion = decayed
+                        record.updated_at = now
+                        await self._store.put(record)
+                        count += 1
+                        await self._emit(
+                            TrustUpdatedEvent(
+                                event_type="trust_updated",
+                                agent_id=agent_id,
+                                old_trust=old_trust,
+                                new_trust=record.trustworthiness,
+                            )
                         )
-                    )
-        return count
+            if span is not None:
+                span.set_attribute("gen_ai.trust.agents_decayed", count)
+                span.set_attribute("gen_ai.trust.half_life_seconds", hl)
+            return count
 
     async def evict_stale_agents(self, *, max_age_seconds: float | None = None) -> int:
         """Remove agents not updated within max_age_seconds. Return count evicted."""

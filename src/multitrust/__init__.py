@@ -40,6 +40,7 @@ from multitrust.observability.events import (
     TrustThresholdCrossedEvent,
     TrustUpdatedEvent,
 )
+from multitrust.observability.tracing import get_tracer, otel_available, trust_span
 from multitrust.operators.decay import evidence_decay, time_decay
 from multitrust.operators.discount import discount_opinion
 from multitrust.operators.fusion import (
@@ -133,4 +134,8 @@ __all__ = [
     "AgentRegisteredEvent",
     "TrustThresholdCrossedEvent",
     "TrustExplainedEvent",
+    # Tracing
+    "get_tracer",
+    "otel_available",
+    "trust_span",
 ]
