@@ -94,7 +94,7 @@ class TrustTimeline:
         matplotlib is not installed.
         """
         try:
-            import matplotlib.pyplot as plt
+            import matplotlib.pyplot as plt  # type: ignore[import-not-found]
         except ImportError:
             raise ImportError(
                 "matplotlib is required for plot(). Install it with: pip install matplotlib"
