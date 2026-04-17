@@ -27,11 +27,11 @@ of at least one minor release.
 | 3.13           | Supported        | Yes       |
 | 3.12           | Supported        | Yes       |
 | 3.11           | Supported        | No        |
-| 3.10           | Minimum required | No        |
+| 3.10           | Minimum required | Yes       |
 | < 3.10         | Not supported    | No        |
 
 MultiTrust requires **Python >= 3.10** (as declared in `pyproject.toml`). CI runs tests
-against Python 3.12 and 3.13. Versions 3.10 and 3.11 are expected to work but are not
+against Python 3.10, 3.12, and 3.13. Python 3.11 is expected to work but is not
 actively tested in CI.
 
 When a Python version reaches [end-of-life](https://devguide.python.org/versions/),
