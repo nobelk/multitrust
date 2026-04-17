@@ -29,5 +29,22 @@ class StoreError(MultiTrustError):
     """Raised when a storage operation fails."""
 
 
+class ConcurrencyError(StoreError):
+    """Raised when an optimistic-concurrency check fails (version mismatch)."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        agent_id: str | None = None,
+        expected_version: int | None = None,
+        actual_version: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.agent_id = agent_id
+        self.expected_version = expected_version
+        self.actual_version = actual_version
+
+
 class AuthorityNotFoundError(MultiTrustError):
     """Raised when an authority cannot be found."""
