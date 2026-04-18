@@ -126,3 +126,35 @@ def test_get_trust_unregistered_raises():
             mgr.get_trust("nonexistent")
     finally:
         mgr.close()
+
+
+def test_sync_admin_export_import_round_trip():
+    from multitrust.storage.memory_ledger import InMemoryEvidenceLedger
+
+    src = SyncTrustManager(evidence_ledger=InMemoryEvidenceLedger())
+    dest = SyncTrustManager()
+    try:
+        src.register_agent("a1", initial_opinion=Opinion(0.7, 0.2, 0.1, 0.5))
+        src.register_authority("auth-1", is_trusted=True)
+        snapshot = src.export_snapshot(actor_id="ops")
+
+        written = dest.import_snapshot(snapshot, mode="replace", actor_id="ops")
+        assert written == 2
+        assert dest.list_authorities() == ["auth-1"]
+    finally:
+        src.close()
+        dest.close()
+
+
+def test_sync_reset_and_audit():
+    from multitrust.storage.memory_ledger import InMemoryEvidenceLedger
+
+    mgr = SyncTrustManager(evidence_ledger=InMemoryEvidenceLedger())
+    try:
+        mgr.register_agent("a1", initial_opinion=Opinion(0.9, 0.05, 0.05, 0.5))
+        mgr.reset_agent("a1", actor_id="ops", reason="test")
+        entries = mgr.admin_audit_log(agent_id="a1")
+        assert len(entries) == 1
+        assert entries[0].metadata["action"] == "reset"
+    finally:
+        mgr.close()

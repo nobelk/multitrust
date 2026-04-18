@@ -5,10 +5,11 @@ import contextlib
 import math
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
+from typing import Any
 
 from multitrust.config.settings import MultiTrustConfig
-from multitrust.core.errors import AgentNotFoundError
+from multitrust.core.errors import AgentNotFoundError, AuthorityNotFoundError
 from multitrust.core.evidence import Evidence
 from multitrust.core.explanation import (
     DecayInfo,
@@ -20,6 +21,7 @@ from multitrust.core.explanation import (
 )
 from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
+from multitrust.manager.admin import ADMIN_AGENT_ID, AdminAction, TrustSnapshot
 from multitrust.manager.timeline import TrustTimeline, generate_trust_timeline
 from multitrust.observability.events import (
     AgentRegisteredEvent,
@@ -46,6 +48,9 @@ from multitrust.operators.mapping import evidence_to_opinion
 from multitrust.storage.base import TrustStore
 from multitrust.storage.evidence_ledger import EvidenceLedger, EvidenceLedgerEntry
 from multitrust.storage.memory import InMemoryTrustStore
+
+AUTHORITY_METADATA_FLAG = "is_authority"
+"""Metadata key that marks a TrustRecord as representing a registered authority."""
 
 
 def _format_horizon(seconds: float) -> str:
@@ -617,7 +622,19 @@ class TrustManager:
         self, authority_id: str, *, is_trusted: bool = False
     ) -> TrustRecord:
         initial_opinion = Opinion.dogmatic_trust() if is_trusted else None
-        return await self.register_agent(authority_id, initial_opinion=initial_opinion)
+        record = await self.register_agent(
+            authority_id,
+            initial_opinion=initial_opinion,
+            **{AUTHORITY_METADATA_FLAG: True},
+        )
+        # Ensure the flag is set even if the authority was already registered
+        # as a plain agent previously.
+        if not record.metadata.get(AUTHORITY_METADATA_FLAG):
+            with self._acquire_thread_lock():
+                async with self._asyncio_lock:
+                    record.metadata[AUTHORITY_METADATA_FLAG] = True
+                    await self._store.put(record)
+        return record
 
     async def deregister_agent(self, agent_id: str) -> bool:
         with self._acquire_thread_lock():
@@ -721,6 +738,400 @@ class TrustManager:
             duration_seconds=duration_seconds,
             num_points=num_points,
         )
+
+    # ------------------------------------------------------------------
+    # Admin / bulk operations
+    # ------------------------------------------------------------------
+
+    async def _record_admin_action(self, action: AdminAction) -> None:
+        """Append audit entries describing an admin action.
+
+        Always writes a canonical entry under ADMIN_AGENT_ID (so deleted targets
+        remain auditable) and, when the action targets specific agents, also
+        appends per-target entries for local lookup via explain_trust-style queries.
+        No-op when no evidence ledger is configured.
+        """
+        if self._evidence_ledger is None:
+            return
+        audit_metadata: dict[str, Any] = {
+            "action": action.action,
+            "actor_id": action.actor_id,
+        }
+        if action.reason is not None:
+            audit_metadata["reason"] = action.reason
+        if action.metadata:
+            audit_metadata.update(action.metadata)
+
+        # Canonical audit entry under ADMIN_AGENT_ID — always written so the
+        # global admin log survives even after targets are deregistered.
+        canonical_metadata = dict(audit_metadata)
+        if action.target_ids:
+            canonical_metadata["target_ids"] = list(action.target_ids)
+        await self._evidence_ledger.append(
+            EvidenceLedgerEntry(
+                agent_id=ADMIN_AGENT_ID,
+                authority_id=action.actor_id,
+                entry_type="admin",
+                timestamp=action.timestamp,
+                metadata=canonical_metadata,
+            )
+        )
+
+        # Per-target entries for local lookup (skipped for target-less actions).
+        for target in action.target_ids:
+            await self._evidence_ledger.append(
+                EvidenceLedgerEntry(
+                    agent_id=target,
+                    authority_id=action.actor_id,
+                    entry_type="admin",
+                    timestamp=action.timestamp,
+                    metadata=dict(audit_metadata),
+                )
+            )
+
+    async def list_authorities(self) -> list[str]:
+        """Return the IDs of all records tagged as authorities."""
+        agent_ids = await self._store.list_agents()
+        authorities: list[str] = []
+        for aid in agent_ids:
+            record = await self._store.get(aid)
+            if record is not None and record.metadata.get(AUTHORITY_METADATA_FLAG):
+                authorities.append(aid)
+        return authorities
+
+    async def get_authority(self, authority_id: str) -> TrustRecord:
+        """Return the authority record or raise AuthorityNotFoundError."""
+        record = await self._store.get(authority_id)
+        if record is None or not record.metadata.get(AUTHORITY_METADATA_FLAG):
+            raise AuthorityNotFoundError(f"Authority '{authority_id}' not found")
+        return record
+
+    async def set_authority_trust(
+        self,
+        authority_id: str,
+        *,
+        opinion: Opinion | None = None,
+        is_trusted: bool | None = None,
+        actor_id: str = "system",
+        reason: str | None = None,
+    ) -> TrustRecord:
+        """Overwrite an authority's opinion.
+
+        Pass either an explicit `opinion` or `is_trusted` (True → dogmatic trust,
+        False → vacuous). Records an admin audit entry.
+        """
+        if opinion is None and is_trusted is None:
+            raise ValueError("Must specify either opinion or is_trusted")
+        new_opinion = (
+            opinion
+            if opinion is not None
+            else (
+                Opinion.dogmatic_trust()
+                if is_trusted
+                else Opinion.vacuous(base_rate=self._config.default_base_rate)
+            )
+        )
+        with self._acquire_thread_lock():
+            async with self._asyncio_lock:
+                record = await self._store.get(authority_id)
+                if record is None or not record.metadata.get(AUTHORITY_METADATA_FLAG):
+                    raise AuthorityNotFoundError(f"Authority '{authority_id}' not found")
+                record.opinion = new_opinion
+                record.updated_at = time.time()
+                await self._store.put(record)
+        await self._record_admin_action(
+            AdminAction(
+                action="set_authority_trust",
+                actor_id=actor_id,
+                reason=reason,
+                target_ids=(authority_id,),
+                metadata={"trustworthiness": new_opinion.trustworthiness},
+            )
+        )
+        return record
+
+    async def deregister_authority(
+        self,
+        authority_id: str,
+        *,
+        actor_id: str = "system",
+        reason: str | None = None,
+    ) -> bool:
+        """Remove an authority. Raises AuthorityNotFoundError if not an authority."""
+        with self._acquire_thread_lock():
+            async with self._asyncio_lock:
+                record = await self._store.get(authority_id)
+                if record is None or not record.metadata.get(AUTHORITY_METADATA_FLAG):
+                    raise AuthorityNotFoundError(f"Authority '{authority_id}' not found")
+                removed = await self._store.delete(authority_id)
+        if removed:
+            await self._record_admin_action(
+                AdminAction(
+                    action="deregister_authority",
+                    actor_id=actor_id,
+                    reason=reason,
+                    target_ids=(authority_id,),
+                )
+            )
+        return removed
+
+    async def export_snapshot(
+        self,
+        *,
+        agent_ids: Sequence[str] | None = None,
+        actor_id: str = "system",
+        reason: str | None = None,
+    ) -> TrustSnapshot:
+        """Serialize records (optionally filtered) plus authority identities.
+
+        The returned snapshot is JSON-serializable via `TrustSnapshot.to_dict()`.
+        Records an admin audit entry.
+        """
+        ids = list(agent_ids) if agent_ids is not None else await self._store.list_agents()
+        records: list[dict[str, Any]] = []
+        authorities: list[str] = []
+        for aid in ids:
+            record = await self._store.get(aid)
+            if record is None:
+                continue
+            records.append(record.to_dict())
+            if record.metadata.get(AUTHORITY_METADATA_FLAG):
+                authorities.append(aid)
+
+        snapshot = TrustSnapshot(
+            records=records,
+            authorities=authorities,
+            metadata={"agent_count": len(records)},
+        )
+        await self._record_admin_action(
+            AdminAction(
+                action="export",
+                actor_id=actor_id,
+                reason=reason,
+                target_ids=tuple(r["agent_id"] for r in records),
+                metadata={"record_count": len(records)},
+            )
+        )
+        return snapshot
+
+    async def import_snapshot(
+        self,
+        snapshot: TrustSnapshot | dict[str, Any],
+        *,
+        mode: str = "merge",
+        actor_id: str = "system",
+        reason: str | None = None,
+    ) -> int:
+        """Load records from a snapshot.
+
+        mode="merge" (default): upsert each record; other existing records are left alone.
+        mode="replace": delete every record in the store, then insert the snapshot's records.
+
+        Returns the number of records written.
+        """
+        if mode not in ("merge", "replace"):
+            raise ValueError(f"Unknown import mode: {mode!r} (expected 'merge' or 'replace')")
+        if isinstance(snapshot, dict):
+            snapshot = TrustSnapshot.from_dict(snapshot)
+
+        authority_set = set(snapshot.authorities)
+        written_ids: list[str] = []
+
+        with self._acquire_thread_lock():
+            async with self._asyncio_lock:
+                if mode == "replace":
+                    for existing_id in await self._store.list_agents():
+                        await self._store.delete(existing_id)
+                for raw in snapshot.records:
+                    record = TrustRecord.from_dict(raw)
+                    if record.agent_id in authority_set:
+                        record.metadata[AUTHORITY_METADATA_FLAG] = True
+                    await self._store.put(record)
+                    written_ids.append(record.agent_id)
+
+        await self._record_admin_action(
+            AdminAction(
+                action="import",
+                actor_id=actor_id,
+                reason=reason,
+                target_ids=tuple(written_ids),
+                metadata={
+                    "mode": mode,
+                    "record_count": len(written_ids),
+                    "schema_version": snapshot.schema_version,
+                },
+            )
+        )
+        return len(written_ids)
+
+    async def reset_agent(
+        self,
+        agent_id: str,
+        *,
+        opinion: Opinion | None = None,
+        clear_counters: bool = True,
+        actor_id: str = "system",
+        reason: str | None = None,
+    ) -> TrustRecord:
+        """Reset a single agent to a vacuous (or caller-supplied) opinion.
+
+        Preserves `created_at` and `metadata` (including authority flag).
+        Bumps `updated_at`. Records an admin audit entry.
+        """
+        new_opinion = (
+            opinion
+            if opinion is not None
+            else Opinion.vacuous(base_rate=self._config.default_base_rate)
+        )
+        with self._acquire_thread_lock():
+            async with self._asyncio_lock:
+                record = await self._store.get(agent_id)
+                if record is None:
+                    raise AgentNotFoundError(f"Agent '{agent_id}' not found")
+                record.opinion = new_opinion
+                if clear_counters:
+                    record.evidence_count = 0
+                    record.positive_total = 0.0
+                    record.negative_total = 0.0
+                record.updated_at = time.time()
+                await self._store.put(record)
+        await self._record_admin_action(
+            AdminAction(
+                action="reset",
+                actor_id=actor_id,
+                reason=reason,
+                target_ids=(agent_id,),
+                metadata={"cleared_counters": clear_counters},
+            )
+        )
+        return record
+
+    async def reset_agents(
+        self,
+        agent_ids: Sequence[str] | None = None,
+        *,
+        opinion: Opinion | None = None,
+        clear_counters: bool = True,
+        actor_id: str = "system",
+        reason: str | None = None,
+    ) -> int:
+        """Bulk reset. If `agent_ids` is None, resets every agent in the store.
+
+        Returns the count of agents reset. Unknown IDs are skipped silently; an
+        `agent_ids` list lets the caller scope bulk blast-radius precisely.
+        """
+        ids = list(agent_ids) if agent_ids is not None else await self._store.list_agents()
+        reset_count = 0
+        for aid in ids:
+            try:
+                await self.reset_agent(
+                    aid,
+                    opinion=opinion,
+                    clear_counters=clear_counters,
+                    actor_id=actor_id,
+                    reason=reason,
+                )
+                reset_count += 1
+            except AgentNotFoundError:
+                continue
+        return reset_count
+
+    async def reseed_agent(
+        self,
+        agent_id: str,
+        *,
+        opinion: Opinion | None = None,
+        positive: float | None = None,
+        negative: float | None = None,
+        actor_id: str = "system",
+        reason: str | None = None,
+    ) -> TrustRecord:
+        """Reseed an agent's opinion from either an explicit Opinion or evidence counts.
+
+        Creates the record if it does not exist, so reseed doubles as "force register
+        with a known starting point". Exactly one of (opinion) or (positive+negative)
+        must be supplied.
+        """
+        has_opinion = opinion is not None
+        has_counts = positive is not None or negative is not None
+        if has_opinion == has_counts:
+            raise ValueError(
+                "Specify exactly one of `opinion` or `positive`+`negative` evidence counts"
+            )
+
+        if has_opinion:
+            new_opinion = opinion
+            pos = 0.0
+            neg = 0.0
+        else:
+            pos = float(positive or 0.0)
+            neg = float(negative or 0.0)
+            new_opinion = evidence_to_opinion(
+                pos,
+                neg,
+                W=self._config.default_prior_weight,
+                base_rate=self._config.default_base_rate,
+            )
+        assert new_opinion is not None  # for mypy
+
+        with self._acquire_thread_lock():
+            async with self._asyncio_lock:
+                record = await self._store.get(agent_id)
+                if record is None:
+                    record = TrustRecord(agent_id=agent_id, opinion=new_opinion)
+                else:
+                    record.opinion = new_opinion
+                record.positive_total = pos
+                record.negative_total = neg
+                record.evidence_count = 1 if has_counts else 0
+                record.updated_at = time.time()
+                await self._store.put(record)
+
+        await self._record_admin_action(
+            AdminAction(
+                action="reseed",
+                actor_id=actor_id,
+                reason=reason,
+                target_ids=(agent_id,),
+                metadata={
+                    "source": "opinion" if has_opinion else "evidence",
+                    "positive": pos,
+                    "negative": neg,
+                },
+            )
+        )
+        return record
+
+    async def admin_audit_log(
+        self,
+        *,
+        agent_id: str | None = None,
+        action: str | None = None,
+        actor_id: str | None = None,
+        since: float | None = None,
+        limit: int | None = None,
+    ) -> list[EvidenceLedgerEntry]:
+        """Return admin audit entries from the ledger, optionally filtered.
+
+        Requires an evidence ledger to be configured; returns [] otherwise.
+        `agent_id=None` returns actions across all targets (including the
+        synthetic ADMIN_AGENT_ID used for untargeted actions).
+        """
+        if self._evidence_ledger is None:
+            return []
+
+        # The canonical admin audit trail lives under ADMIN_AGENT_ID; per-agent
+        # queries read that agent's own entries (a subset, for local attribution).
+        query_id = agent_id if agent_id is not None else ADMIN_AGENT_ID
+        entries = await self._evidence_ledger.query(query_id, since=since, limit=limit)
+        filtered = [e for e in entries if e.entry_type == "admin"]
+        if action is not None:
+            filtered = [e for e in filtered if e.metadata.get("action") == action]
+        if actor_id is not None:
+            filtered = [e for e in filtered if e.metadata.get("actor_id") == actor_id]
+        if limit is not None:
+            filtered = filtered[-limit:]
+        return filtered
 
     async def __aenter__(self) -> TrustManager:
         return self

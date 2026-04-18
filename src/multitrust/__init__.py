@@ -28,11 +28,12 @@ from multitrust.evidence.collector import CallbackCollector, EvidenceCollector, 
 from multitrust.evidence.rules import EvidenceRule, RuleEngine
 from multitrust.integrations.generic.context import TrustContext
 from multitrust.integrations.generic.decorators import collect_evidence, trust_aware
+from multitrust.manager.admin import ADMIN_AGENT_ID, AdminAction, TrustSnapshot
 from multitrust.manager.policy import DecisionPolicy, ThresholdPolicy, TrustPolicy
 from multitrust.manager.sync import SyncTrustManager
 from multitrust.manager.timeline import TimelinePoint, TrustTimeline, generate_trust_timeline
 from multitrust.manager.trust_authority import DistributedAuthority, TrustAuthority
-from multitrust.manager.trust_manager import TrustManager
+from multitrust.manager.trust_manager import AUTHORITY_METADATA_FLAG, TrustManager
 from multitrust.observability.events import (
     AgentRegisteredEvent,
     EventBus,
@@ -116,6 +117,11 @@ __all__ = [
     "TrustPolicy",
     "DecisionPolicy",
     "ThresholdPolicy",
+    # Admin / bulk ops
+    "AdminAction",
+    "TrustSnapshot",
+    "ADMIN_AGENT_ID",
+    "AUTHORITY_METADATA_FLAG",
     # Storage
     "TrustStore",
     "VersionedTrustStore",
