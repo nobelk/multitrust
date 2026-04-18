@@ -484,6 +484,26 @@ class TrustManager:
     async def deregister_agent(self, agent_id) -> bool: ...
     async def evict_stale_agents(self, *, max_age_seconds=None) -> int: ...
 
+    # Admin / bulk operations (see §5.6)
+    async def list_authorities(self) -> list[str]: ...
+    async def get_authority(self, authority_id) -> TrustRecord: ...
+    async def set_authority_trust(self, authority_id, *, opinion=None, is_trusted=None,
+                                  actor_id="system", reason=None) -> TrustRecord: ...
+    async def deregister_authority(self, authority_id, *, actor_id="system",
+                                   reason=None) -> bool: ...
+    async def reset_agent(self, agent_id, *, opinion=None, clear_counters=True,
+                          actor_id="system", reason=None) -> TrustRecord: ...
+    async def reset_agents(self, agent_ids=None, *, opinion=None, clear_counters=True,
+                           actor_id="system", reason=None) -> int: ...
+    async def reseed_agent(self, agent_id, *, opinion=None, positive=None, negative=None,
+                           actor_id="system", reason=None) -> TrustRecord: ...
+    async def export_snapshot(self, *, agent_ids=None, actor_id="system",
+                              reason=None) -> TrustSnapshot: ...
+    async def import_snapshot(self, snapshot, *, mode="merge", actor_id="system",
+                              reason=None) -> int: ...
+    async def admin_audit_log(self, *, agent_id=None, action=None, actor_id=None,
+                              since=None, limit=None) -> list[EvidenceLedgerEntry]: ...
+
     # Async context manager (for clean startup/shutdown)
     async def __aenter__(self) -> TrustManager: ...   # Initialize store connections
     async def __aexit__(self, *exc) -> None: ...       # Flush events, close store
@@ -491,6 +511,59 @@ class TrustManager:
     # Maintenance
     async def apply_decay(self) -> int: ...
 ```
+
+### 5.6 Admin Actions and Snapshots
+
+Operator-facing state management lives in `manager/admin.py`, with the methods themselves on `TrustManager` (and mirrored on `SyncTrustManager`). The module exports two data types and a sentinel.
+
+```python
+@dataclass(frozen=True, slots=True)
+class AdminAction:
+    action: str                         # e.g. "reset", "reseed", "export", "import",
+                                        #      "set_authority_trust", "deregister_authority"
+    actor_id: str                       # who performed the action
+    reason: str | None = None
+    target_ids: tuple[str, ...] = ()
+    timestamp: float = field(default_factory=time.time)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+@dataclass(slots=True)
+class TrustSnapshot:
+    records: list[dict[str, Any]] = field(default_factory=list)   # TrustRecord.to_dict()
+    authorities: list[str] = field(default_factory=list)          # ids in records flagged as authorities
+    schema_version: int = 1                                        # SNAPSHOT_SCHEMA_VERSION
+    created_at: float = field(default_factory=time.time)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+ADMIN_AGENT_ID = "__admin__"            # synthetic id for untargeted admin entries
+AUTHORITY_METADATA_FLAG = "is_authority"   # TrustRecord.metadata key that tags an authority
+```
+
+**Authority flagging.** `register_authority()` now stamps `metadata[AUTHORITY_METADATA_FLAG] = True` on the record. This is what makes `list_authorities()`, `get_authority()`, and the snapshot's `authorities` list possible without a separate store. Missing-or-false means "plain agent"; `get_authority()` and `set_authority_trust()` raise `AuthorityNotFoundError` on a non-authority id.
+
+**Audit trail model.** When an `EvidenceLedger` is configured, every mutating admin method calls `_record_admin_action(AdminAction(...))`, which appends:
+
+1. A **canonical entry** under `ADMIN_AGENT_ID` with `entry_type="admin"` — this is the global operator log, unaffected by subsequent target deletion.
+2. For target-scoped actions, a **per-target entry** for each id in `target_ids` so `admin_audit_log(agent_id=x)` returns the local view.
+
+`admin_audit_log()` reads from the canonical stream by default (`agent_id=None` ⇒ `ADMIN_AGENT_ID`) and filters client-side by `action`, `actor_id`, and `since`. Without a ledger configured the method is a no-op returning `[]`; the admin operation itself still succeeds.
+
+**Reset vs. reseed.**
+
+- `reset_agent` restores a vacuous (or caller-supplied) opinion, optionally clearing the running `positive_total` / `negative_total` / `evidence_count` counters. `created_at` and `metadata` — including the authority flag — are preserved.
+- `reseed_agent` is strictly exclusive: callers pass **either** `opinion=...` **or** `positive=...` / `negative=...`, never both. When counts are supplied they are mapped to an opinion via `evidence_to_opinion()` with the config's default prior weight and base rate. Unlike reset, reseed creates the record if missing, so it doubles as "force-register at a known starting point".
+
+**Snapshot semantics.**
+
+- `export_snapshot(agent_ids=...)` iterates ids (or `store.list_agents()` when `None`), calling `TrustRecord.to_dict()` on each; the authority flag is preserved via `authorities` at the snapshot root.
+- `import_snapshot(snapshot, mode=...)`:
+  - `"merge"` (default) — upsert each record; records outside the snapshot are left alone.
+  - `"replace"` — delete every record in the store first, then insert the snapshot's records.
+  - `dict` inputs are accepted and validated via `TrustSnapshot.from_dict()`, which raises on unknown `schema_version` values.
+
+Both operations emit an admin ledger entry with `target_ids` listing every affected record id and `metadata` including the record count (and, for imports, the mode and schema version).
+
+`get_authority`, `set_authority_trust`, and `deregister_authority` raise `AuthorityNotFoundError` (from the existing `MultiTrustError` hierarchy) when the id is absent or unflagged. `reset_agent` raises `AgentNotFoundError`; `reset_agents` skips unknown ids silently so operators can scope a bulk reset by id list without pre-filtering.
 
 ### 5.5 Framework Integration Examples
 

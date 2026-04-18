@@ -64,6 +64,7 @@ Pure functions implementing Subjective Logic math:
 - **SyncTrustManager** (`manager/sync.py`): Synchronous wrapper around TrustManager for non-async code.
 - **TrustAuthority** / **DistributedAuthority**: Named trust sources that can discount opinions.
 - **TrustPolicy** / **ThresholdPolicy**: Pluggable decision policies for trust gating.
+- **Admin actions** (`manager/admin.py`): Operator-facing API for bulk state management — `reset_agent` / `reset_agents`, `reseed_agent`, `export_snapshot` / `import_snapshot`, plus authority management (`list_authorities`, `get_authority`, `set_authority_trust`, `deregister_authority`). Every mutating call accepts `actor_id` / `reason` and, when an `EvidenceLedger` is configured, appends an `entry_type="admin"` entry to the ledger (under the synthetic `ADMIN_AGENT_ID` plus per-target entries). Query via `admin_audit_log()`. Authorities are identified by `TrustRecord.metadata[AUTHORITY_METADATA_FLAG]` so they round-trip through snapshots. Exported types: `AdminAction`, `TrustSnapshot`, `ADMIN_AGENT_ID`, `AUTHORITY_METADATA_FLAG`.
 
 ### Storage (`storage/`)
 

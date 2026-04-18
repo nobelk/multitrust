@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Admin & bulk operations on `TrustManager`** — operator-facing API for resetting,
+  reseeding, and snapshotting trust state, plus authority lifecycle management:
+  - `reset_agent` / `reset_agents` — revert an agent (or every agent) to a vacuous
+    (or caller-supplied) opinion while preserving `created_at` and metadata.
+  - `reseed_agent` — force-set an agent's opinion from either an explicit `Opinion`
+    or `positive`/`negative` evidence counts; creates the record if absent.
+  - `export_snapshot` / `import_snapshot` — portable, versioned `TrustSnapshot` for
+    staging → prod promotion, disaster recovery, or storage-backend migration.
+    `mode="merge"` (default) upserts records; `mode="replace"` swaps the entire store.
+  - `list_authorities` / `get_authority` / `set_authority_trust` /
+    `deregister_authority` — query and manage authorities, backed by a new
+    `AUTHORITY_METADATA_FLAG` that is stamped onto authority records.
+  - `admin_audit_log` — query admin entries from the evidence ledger by action,
+    actor, target, or time window.
+- **`AdminAction` / `TrustSnapshot` data types** (`multitrust.manager.admin`) —
+  exported from the top-level package. `ADMIN_AGENT_ID` sentinel identifies the
+  synthetic agent used for untargeted admin ledger entries.
+- **Admin audit trail in the evidence ledger** — every mutating admin call accepts
+  `actor_id` and `reason` and, when an `EvidenceLedger` is configured, writes a
+  canonical entry under `ADMIN_AGENT_ID` plus per-target entries with
+  `entry_type="admin"`.
+- `SyncTrustManager` mirrors all of the above with matching signatures.
+
 ## [0.1.0] - 2025-01-01
 
 ### Added

@@ -198,6 +198,93 @@ async with TrustContext(manager, "agent-1") as ctx:
 # Evidence submitted automatically on exit
 ```
 
+## Admin & Bulk Operations
+
+`TrustManager` exposes an administrative API for operator tasks — resetting agents, re-seeding opinions from known-good values, exporting/importing state between environments, and managing authorities. Every admin call is attributable (`actor_id`, `reason`) and, when an `EvidenceLedger` is configured, appended to the ledger as `entry_type="admin"` so the full operator trail is auditable alongside regular evidence.
+
+```python
+from multitrust import TrustManager, Opinion, TrustSnapshot
+
+async with TrustManager(evidence_ledger=ledger) as manager:
+    # --- Authorities -------------------------------------------------------
+    await manager.register_authority("validator", is_trusted=True)
+    authorities = await manager.list_authorities()               # ["validator"]
+    await manager.set_authority_trust(
+        "validator",
+        opinion=Opinion.dogmatic_trust(),
+        actor_id="alice", reason="post-review re-trust",
+    )
+    await manager.deregister_authority("validator", actor_id="alice")
+
+    # --- Reset an agent (preserves created_at and metadata) ----------------
+    await manager.reset_agent(
+        "agent-1",
+        clear_counters=True,
+        actor_id="alice",
+        reason="post-incident cleanup",
+    )
+
+    # --- Bulk reset (scope by id list, or pass None for all agents) --------
+    await manager.reset_agents(["agent-1", "agent-2"], actor_id="alice")
+
+    # --- Reseed from a known-good opinion *or* evidence counts -------------
+    await manager.reseed_agent("agent-1", opinion=Opinion.dogmatic_trust())
+    await manager.reseed_agent("agent-2", positive=10.0, negative=1.0)
+
+    # --- Export / import snapshots (staging → prod, DR, store migration) ---
+    snapshot = await manager.export_snapshot(actor_id="alice")
+    json_blob = snapshot.to_dict()                                # JSON-safe
+
+    restored = TrustSnapshot.from_dict(json_blob)
+    await manager.import_snapshot(restored, mode="merge")         # or "replace"
+
+    # --- Admin audit trail (requires an EvidenceLedger) --------------------
+    entries = await manager.admin_audit_log(action="reset")       # filter by action
+    entries = await manager.admin_audit_log(agent_id="agent-1")   # per-target
+```
+
+### Method reference
+
+| Method | Purpose |
+|---|---|
+| `list_authorities()` | IDs of all records tagged as authorities. |
+| `get_authority(id)` | Fetch an authority record or raise `AuthorityNotFoundError`. |
+| `set_authority_trust(id, *, opinion=..., is_trusted=...)` | Overwrite an authority's opinion. |
+| `deregister_authority(id)` | Remove an authority (raises if the id is not an authority). |
+| `reset_agent(id, *, opinion=None, clear_counters=True)` | Set an agent back to a vacuous (or supplied) opinion; preserves `created_at`/metadata. |
+| `reset_agents(ids=None, ...)` | Bulk reset; `ids=None` resets every agent. Unknown ids are skipped. |
+| `reseed_agent(id, *, opinion=... | positive=..., negative=...)` | Force-set an agent's opinion from either a direct `Opinion` or evidence counts; creates the record if absent. |
+| `export_snapshot(*, agent_ids=None)` → `TrustSnapshot` | Serializable dump of records + authority identities. |
+| `import_snapshot(snapshot, *, mode="merge" | "replace")` → `int` | Load records; returns how many were written. |
+| `admin_audit_log(*, agent_id=None, action=None, actor_id=None, since=None, limit=None)` | Query the admin entries in the evidence ledger. |
+
+Every mutating call accepts `actor_id: str = "system"` and `reason: str | None = None`, which land in the audit entry's metadata.
+
+### Audit trail model
+
+- Admin entries are written with `entry_type="admin"`, alongside regular evidence in the ledger.
+- A canonical entry is always written under the synthetic `ADMIN_AGENT_ID` (`"__admin__"`) so untargeted actions (and actions against later-deleted agents) remain queryable.
+- Target-scoped actions *also* write a per-target entry so `admin_audit_log(agent_id=...)` returns the local view.
+- Without an `EvidenceLedger` configured, admin methods still work but `admin_audit_log()` returns `[]`.
+
+### Snapshot schema
+
+`TrustSnapshot.to_dict()` / `from_dict()` emits a versioned payload:
+
+```python
+{
+    "schema_version": 1,
+    "created_at": 1_713_456_789.0,
+    "records":     [...],     # list of TrustRecord.to_dict() entries
+    "authorities": [...],     # ids within `records` that are authorities
+    "metadata":    {...},
+}
+```
+
+`import_snapshot()` re-stamps the authority flag on imported records so the authority set round-trips across environments.
+
+All admin methods are also available on `SyncTrustManager` with identical signatures.
+
 ## Configuration
 
 ### Programmatic

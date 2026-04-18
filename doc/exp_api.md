@@ -571,3 +571,32 @@ Phase 7 (Tests)  ← depends on Phase 3; can be written alongside each phase
    `threshold`, `margin`, and `evidence_needed`. Recommend: define an optional policy
    interface such as `explain_decision(...) -> DecisionExplanation | None` and treat
    threshold-based explanation as the default fallback, not the universal model.
+
+---
+
+## Interaction with Admin Actions
+
+Admin / bulk operations (`reset_agent`, `reseed_agent`, `set_authority_trust`, snapshot
+import, etc.) share the `EvidenceLedger` with regular evidence submissions, but write
+entries with `entry_type="admin"` rather than `"evidence"`. This has two implications
+for `explain_trust()`:
+
+1. **Attribution must filter by `entry_type`.** `EvidenceLedger.query()` returns every
+   entry for an agent, including admin entries. The attribution step in §3.2 must only
+   consider `entry_type == "evidence"` (and, depending on the phase, discounted-opinion
+   entries) when grouping by `(authority_id, rule_name)`. Counting admin entries as
+   evidence would silently poison the contributor list — e.g., a `reset` would appear as
+   an observation from the actor.
+
+2. **Operator intervention belongs in `limitations`.** When the most recent admin entry
+   for an agent is newer than the oldest evidence entry that would otherwise dominate
+   attribution, the explanation is at best a post-reset view. `TrustExplanation` should
+   note this in `limitations` (for example, "opinion was reset by actor=alice at
+   2026-04-18T15:12Z; contributor impact is measured against the post-reset baseline").
+   `admin_audit_log(agent_id=...)` is the direct source for that lookup.
+
+Snapshot import (`mode="replace"`) is the edge case worth calling out explicitly: after a
+replace, a record's `created_at` reflects the snapshot, the ledger's pre-import entries
+still exist, and attribution against them is meaningless. Implementations should either
+trim attribution to entries after the most recent `import` admin entry, or mark the
+explanation `partial` with an appropriate limitation.
