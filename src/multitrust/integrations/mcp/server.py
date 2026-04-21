@@ -49,7 +49,7 @@ def build_server(manager: Any, *, name: str = "multitrust") -> Server:
     wrapper = TrustMCPWrapper(manager)
     server = Server(name)
 
-    @server.list_tools()  # type: ignore[no-untyped-call,misc]
+    @server.list_tools()  # type: ignore[misc,untyped-decorator,unused-ignore]
     async def _list_tools() -> list[Any]:
         return [
             mcp_types.Tool(
@@ -60,7 +60,7 @@ def build_server(manager: Any, *, name: str = "multitrust") -> Server:
             for t in wrapper.list_tools()
         ]
 
-    @server.call_tool()  # type: ignore[no-untyped-call,misc]
+    @server.call_tool()  # type: ignore[misc,untyped-decorator,unused-ignore]
     async def _call_tool(name: str, arguments: dict[str, Any] | None) -> list[Any]:
         try:
             result = await wrapper.call_tool(name, arguments)

@@ -15,10 +15,13 @@ and the integration follows the same pattern used by the existing
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from multitrust.core.errors import AgentNotFoundError
 from multitrust.core.evidence import Evidence
+
+_Handler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
 class MCPToolError(Exception):
@@ -221,7 +224,7 @@ class TrustMCPWrapper:
         except AgentNotFoundError as exc:
             raise MCPToolError(str(exc)) from exc
 
-    def _handlers(self) -> dict[str, Any]:
+    def _handlers(self) -> dict[str, _Handler]:
         return {
             "register_agent": self._register_agent,
             "get_trust": self._get_trust,
@@ -292,7 +295,8 @@ class TrustMCPWrapper:
         if "top_k_contributors" in args and args["top_k_contributors"] is not None:
             kwargs["top_k_contributors"] = int(args["top_k_contributors"])
         explanation = await self._manager.explain_trust(agent_id, **kwargs)
-        return explanation.to_dict()
+        result: dict[str, Any] = explanation.to_dict()
+        return result
 
 
 def _require_str(args: dict[str, Any], key: str) -> str:
