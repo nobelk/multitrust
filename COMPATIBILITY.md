@@ -53,10 +53,11 @@ core API.
 | LangGraph     | `langgraph`          | >= 0.2          | Node and guardrail adapters    |
 | OpenAI Agents | `openai-agents`      | >= 0.1          | Guardrail integration          |
 
-### Tier 2 — Best-Effort
+### Experimental
 
-These integrations are provided for convenience and tested where practical, but may lag
-behind upstream releases. Community contributions are welcome.
+Experimental integrations ship without contract tests in CI. They are provided as a
+starting point but **may change, break, or be removed in any minor release**. Before
+depending on one, please open an issue so we can gauge demand.
 
 | Integration   | Package              | Minimum Version | Notes                          |
 |---------------|----------------------|-----------------|--------------------------------|
@@ -64,11 +65,35 @@ behind upstream releases. Community contributions are welcome.
 | Google ADK    | `google-adk`         | >= 0.1          | Tool and callback adapters     |
 | Anthropic     | `anthropic`          | >= 0.30         | Tool-use integration           |
 
-**What "best-effort" means:**
-- We accept bug reports and PRs but may not fix issues on the same timeline as Tier 1.
+**What "experimental" means:**
+- No contract tests in CI — import surface is checked, behavior is not.
 - Upstream breaking changes may not be addressed until a community member or maintainer
-  has bandwidth.
-- These integrations may be promoted to Tier 1 as usage and test coverage grow.
+  picks it up.
+- The public API may change or be removed without a deprecation cycle.
+- Bug reports and PRs are welcome; response times are not guaranteed.
+
+**Promotion criteria.** An experimental integration graduates to Tier 1 when both of the
+following hold:
+
+1. **Contract tests** covering the public adapters exist in `tests/integrations/` and
+   run in CI.
+2. **Demonstrated user demand** — at least one issue, discussion, or PR from a user
+   building on the integration.
+
+### Protocols
+
+Protocol adapters are not tied to a single framework and are treated separately from the
+framework tier system.
+
+| Adapter | Package   | Notes                                                        |
+|---------|-----------|--------------------------------------------------------------|
+| MCP     | `mcp`     | Core wrapper has no hard dep; optional stdio server needs `mcp`. Has contract tests. |
+
+### Backbone
+
+The `multitrust.integrations.generic` module (decorators and `TrustContext`) has no
+framework dependency and is covered by the core API stability guarantees. It is the
+recommended starting point when your framework is experimental or unsupported.
 
 ## Optional Dependency Versions
 

@@ -417,7 +417,18 @@ src/multitrust/
 
 All integrations are optional — they work without the framework installed and raise clear errors if the framework is missing.
 
-### LangGraph
+### Support tiers
+
+| Tier            | Integrations                         | Guarantees                                                                                          |
+|-----------------|--------------------------------------|-----------------------------------------------------------------------------------------------------|
+| **Tier 1**      | LangGraph, OpenAI Agents             | Contract tests in CI. Public API is stable; breaking changes go through a deprecation cycle.        |
+| **Experimental**| Google ADK, CrewAI, Anthropic        | No contract tests. May change or be removed in any minor release. Open an issue before depending.   |
+
+The generic decorators (`@trust_aware`, `@collect_evidence`, `TrustContext`) have no framework dependency and are covered by the core stability guarantees — reach for them first if your framework is experimental or unsupported. MCP is a protocol adapter and is covered separately.
+
+See [`COMPATIBILITY.md`](COMPATIBILITY.md) for the full policy, including the criteria for promoting an integration from experimental to Tier 1.
+
+### LangGraph *(Tier 1)*
 
 ```python
 from multitrust.integrations.langgraph import (
@@ -430,7 +441,7 @@ gate = make_trust_gate_node(manager, "agent-1")
 edge = make_trust_conditional_edge(manager, "agent-1", "trusted_node", "fallback_node")
 ```
 
-### OpenAI Agents
+### OpenAI Agents *(Tier 1)*
 
 ```python
 from multitrust.integrations.openai_agents import TrustGuardrail, get_trust_tool_definition
@@ -439,7 +450,9 @@ guardrail = TrustGuardrail(manager, "agent-1", min_trust=0.7)
 allowed = await guardrail.check()
 ```
 
-### Google ADK
+### Google ADK *(Experimental)*
+
+> **Experimental.** No contract tests in CI. API may change or be removed in any minor release.
 
 ```python
 from multitrust.integrations.google_adk import TrustBeforeAgentCallback, TrustAfterAgentCallback
@@ -448,7 +461,9 @@ before = TrustBeforeAgentCallback(manager, "agent-1", threshold=0.6)
 after  = TrustAfterAgentCallback(manager, "agent-1")
 ```
 
-### CrewAI
+### CrewAI *(Experimental)*
+
+> **Experimental.** No contract tests in CI. API may change or be removed in any minor release.
 
 ```python
 from multitrust.integrations.crewai import TrustMiddleware, TrustTaskCallback
@@ -457,7 +472,9 @@ middleware = TrustMiddleware(manager, min_trust=0.5)
 best = await middleware.select_agent(["agent-1", "agent-2"])
 ```
 
-### Anthropic
+### Anthropic *(Experimental)*
+
+> **Experimental.** No contract tests in CI. API may change or be removed in any minor release.
 
 ```python
 from multitrust.integrations.anthropic import get_trust_tool_definition, TrustPreMessageHook
@@ -466,7 +483,7 @@ tool_def = get_trust_tool_definition()  # Anthropic tool_use format
 hook = TrustPreMessageHook(manager, "agent-1", threshold=0.6)
 ```
 
-### MCP (Model Context Protocol)
+### MCP (Model Context Protocol) *(Protocol adapter)*
 
 Expose trust operations as MCP tools. The wrapper has no hard dependency on the
 `mcp` package and is safe to import anywhere; the optional stdio server module

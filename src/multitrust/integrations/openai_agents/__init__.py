@@ -1,6 +1,12 @@
 """OpenAI Agents integration for MultiTrust.
 
-Requires: pip install openai-agents
+Support tier: **tier-1** (supported).
+
+Tier-1 integrations have contract tests in CI and a stable public surface.
+Breaking changes go through a deprecation cycle. See ``COMPATIBILITY.md``
+in the repo root for the full policy.
+
+Requires: ``pip install openai-agents``
 """
 
 from multitrust.integrations.openai_agents.guardrails import TrustGuardrail
