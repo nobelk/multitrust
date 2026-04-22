@@ -24,15 +24,15 @@ of at least one minor release.
 
 | Python Version | Status           | CI Tested |
 |----------------|------------------|-----------|
-| 3.13           | Supported        | Yes       |
-| 3.12           | Supported        | Yes       |
-| 3.11           | Supported        | No        |
+| 3.13           | Supported        | No        |
+| 3.12           | Supported        | No        |
+| 3.11           | Supported        | Yes       |
 | 3.10           | Minimum required | Yes       |
 | < 3.10         | Not supported    | No        |
 
 MultiTrust requires **Python >= 3.10** (as declared in `pyproject.toml`). CI runs tests
-against Python 3.10, 3.12, and 3.13. Python 3.11 is expected to work but is not
-actively tested in CI.
+against Python 3.10 and 3.11. Python 3.12 and 3.13 are declared as supported via
+package classifiers and are expected to work, but are not actively exercised in CI.
 
 When a Python version reaches [end-of-life](https://devguide.python.org/versions/),
 support will be dropped in the next minor release.
@@ -78,7 +78,7 @@ behind upstream releases. Community contributions are welcome.
 | `logging`  | `structlog`            | >= 24.0         |
 | `otel`     | `opentelemetry-api/sdk`| >= 1.20         |
 | `sqlite`   | `aiosqlite`            | >= 0.20         |
-| `postgres` | `asyncpg`              | >= 0.29         |
+| `redis`    | `redis`                | >= 5.0          |
 | `metrics`  | `prometheus-client`    | >= 0.20         |
 
 ## Upgrade Policy

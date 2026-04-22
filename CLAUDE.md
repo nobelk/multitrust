@@ -120,4 +120,4 @@ All three steps must pass before considering a change complete.
 
 ## CI
 
-GitHub Actions runs lint/format/mypy, then tests on Python 3.10, 3.12, and 3.13. All three must pass.
+GitHub Actions runs lint/format/mypy, then tests on Python 3.10 and 3.11. Both must pass.

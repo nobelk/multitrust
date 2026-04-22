@@ -69,9 +69,11 @@ Layer 2: multitrust-integrations   Framework adapters
          ├── Google ADK: callbacks, session integration
          ├── CrewAI: middleware, task callbacks
          ├── Anthropic: tool definitions, hooks
+         ├── MCP: TrustMCPWrapper + optional stdio server (wraps core as Model Context Protocol tools)
          └── Generic: @trust_aware decorator, TrustContext
 
-Layer 3: multitrust-server         (Future) MCP server / REST API
+Layer 3: multitrust-server         (Future) Standalone REST / gRPC API
+                                   (MCP server now ships in Layer 2 under integrations/mcp)
 ```
 
 ### 2.4 Storage Strategy
@@ -691,7 +693,9 @@ async with TrustContext(manager, agent_id="agent_x") as ctx:
 
 ### Future Phases (Post v0.1.0)
 
-- **Phase 5:** MCP server wrapping core operations as tools (matches README goal)
+- **Phase 5:** ~~MCP server wrapping core operations as tools~~ — shipped; see
+  `multitrust.integrations.mcp` (`TrustMCPWrapper`, `get_mcp_tool_definitions`,
+  optional stdio server at `integrations/mcp/server.py`).
 - **Phase 6:** REST/gRPC API for microservice deployment
 - **Phase 7:** Multi-hop trust chains (A → B → C → X)
 - **Phase 8:** Trust visualization dashboard

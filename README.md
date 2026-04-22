@@ -350,6 +350,19 @@ async with TrustManager(store=store) as manager:
     # Data persists across restarts
 ```
 
+### Redis (shared / high-throughput)
+
+Requires the `redis` extra (`pip install "multitrust[redis]"`):
+
+```python
+from multitrust import TrustManager, RedisTrustStore
+
+store = RedisTrustStore(url="redis://localhost:6379/0")
+async with TrustManager(store=store) as manager:
+    await manager.register_agent("agent-1")
+    # State is shared across processes connected to the same Redis instance
+```
+
 ### Evidence Ledger
 
 The evidence ledger is an append-only audit trail that records every piece of evidence submitted, enabling detailed attribution in `explain_trust()`. It is optional — without it, explanations are still available but marked as `partial`.
@@ -387,7 +400,7 @@ src/multitrust/
 ├── config/             # MultiTrustConfig, defaults, env-var loading
 ├── operators/          # Fusion, discount, decay, mapping operators
 ├── manager/            # TrustManager, TrustAuthority, policies
-├── storage/            # TrustStore protocol, InMemoryTrustStore, SQLiteTrustStore, EvidenceLedger
+├── storage/            # TrustStore protocol, InMemoryTrustStore, SQLiteTrustStore, RedisTrustStore, EvidenceLedger
 ├── evidence/           # EvidenceCollector, RuleEngine
 ├── integrations/
 │   ├── generic/        # Decorators and TrustContext (no framework deps)
@@ -395,7 +408,8 @@ src/multitrust/
 │   ├── openai_agents/  # OpenAI Agents guardrails and tool definitions
 │   ├── google_adk/     # Google ADK callbacks
 │   ├── crewai/         # CrewAI middleware and task callbacks
-│   └── anthropic/      # Anthropic tool definitions and message hooks
+│   ├── anthropic/      # Anthropic tool definitions and message hooks
+│   └── mcp/            # Model Context Protocol wrapper and optional stdio server
 └── observability/      # EventBus, MetricsCollector, structured logging
 ```
 
@@ -450,6 +464,25 @@ from multitrust.integrations.anthropic import get_trust_tool_definition, TrustPr
 
 tool_def = get_trust_tool_definition()  # Anthropic tool_use format
 hook = TrustPreMessageHook(manager, "agent-1", threshold=0.6)
+```
+
+### MCP (Model Context Protocol)
+
+Expose trust operations as MCP tools. The wrapper has no hard dependency on the
+`mcp` package and is safe to import anywhere; the optional stdio server module
+requires `pip install mcp`.
+
+```python
+from multitrust import TrustManager
+from multitrust.integrations.mcp import TrustMCPWrapper, get_mcp_tool_definitions
+
+tool_defs = get_mcp_tool_definitions()  # MCP tool schema list
+
+async with TrustManager() as manager:
+    wrapper = TrustMCPWrapper(manager)
+    # Wire `wrapper` into your MCP runtime, or run the bundled stdio server:
+    #   from multitrust.integrations.mcp.server import run_stdio
+    #   await run_stdio(manager)
 ```
 
 ## Observability

@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   canonical entry under `ADMIN_AGENT_ID` plus per-target entries with
   `entry_type="admin"`.
 - `SyncTrustManager` mirrors all of the above with matching signatures.
+- **MCP integration** (`multitrust.integrations.mcp`) — exposes core trust
+  operations as [Model Context Protocol](https://modelcontextprotocol.io) tools.
+  - `TrustMCPWrapper` and `get_mcp_tool_definitions` wrap a `TrustManager` and
+    have no hard dependency on the `mcp` package, so they can be imported and
+    tested anywhere.
+  - `multitrust.integrations.mcp.server` provides an optional stdio server
+    (`build_server`, `run_stdio`) that wires the wrapper into the official
+    `mcp` SDK; install with `pip install mcp`.
 
 ## [0.1.0] - 2025-01-01
 
