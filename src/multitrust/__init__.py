@@ -24,6 +24,22 @@ from multitrust.core.explanation import (
 from multitrust.core.opinion import Opinion
 from multitrust.core.trust_record import TrustRecord
 from multitrust.core.types import AgentId, AuthorityId, TrustLevel
+from multitrust.evaluation import (
+    CorpusReport,
+    Decision,
+    DecisionExpectation,
+    EvaluationCorpus,
+    EvidenceStep,
+    ExpectationResult,
+    ScenarioCase,
+    ScenarioResult,
+    canonical_corpus,
+    diff_reports,
+    evaluate_corpus,
+    evaluate_scenario,
+    report_to_json,
+    report_to_markdown,
+)
 from multitrust.evidence.collector import CallbackCollector, EvidenceCollector, RuleBasedCollector
 from multitrust.evidence.rules import EvidenceRule, RuleEngine
 from multitrust.integrations.generic.context import TrustContext
@@ -142,6 +158,21 @@ __all__ = [
     "trust_aware",
     "collect_evidence",
     "TrustContext",
+    # Evaluation harness
+    "Decision",
+    "DecisionExpectation",
+    "EvaluationCorpus",
+    "EvidenceStep",
+    "ScenarioCase",
+    "ExpectationResult",
+    "ScenarioResult",
+    "CorpusReport",
+    "evaluate_scenario",
+    "evaluate_corpus",
+    "canonical_corpus",
+    "report_to_markdown",
+    "report_to_json",
+    "diff_reports",
     # Observability
     "EventBus",
     "TrustEvent",
