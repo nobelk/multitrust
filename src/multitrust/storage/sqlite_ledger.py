@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from multitrust.core.errors import StoreError
+from multitrust.storage._errors import store_op
 from multitrust.storage.evidence_ledger import EvidenceLedgerEntry
 
 if TYPE_CHECKING:
@@ -32,6 +32,7 @@ class SQLiteEvidenceLedger:
 
         if self._conn is None:
             self._conn = await aiosqlite.connect(self._path)
+            self._conn.row_factory = aiosqlite.Row
             await self._conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS evidence_log (
@@ -62,55 +63,54 @@ class SQLiteEvidenceLedger:
             await self._conn.commit()
         return self._conn
 
+    @store_op("Failed to append evidence")
     async def append(self, entry: EvidenceLedgerEntry) -> str:
-        try:
-            conn = await self._ensure_table()
-            await conn.execute(
-                """
-                INSERT INTO evidence_log
-                    (event_id, agent_id, authority_id, entry_type,
-                     positive, negative, belief, disbelief, uncertainty, base_rate,
-                     timestamp, rule_name, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    entry.event_id,
-                    entry.agent_id,
-                    entry.authority_id,
-                    entry.entry_type,
-                    entry.positive,
-                    entry.negative,
-                    entry.belief,
-                    entry.disbelief,
-                    entry.uncertainty,
-                    entry.base_rate,
-                    entry.timestamp,
-                    entry.rule_name,
-                    json.dumps(entry.metadata) if entry.metadata else None,
-                ),
-            )
-            await conn.commit()
-            return entry.event_id
-        except Exception as exc:
-            raise StoreError(f"Failed to append evidence for {entry.agent_id!r}") from exc
+        conn = await self._ensure_table()
+        await conn.execute(
+            """
+            INSERT INTO evidence_log
+                (event_id, agent_id, authority_id, entry_type,
+                 positive, negative, belief, disbelief, uncertainty, base_rate,
+                 timestamp, rule_name, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry.event_id,
+                entry.agent_id,
+                entry.authority_id,
+                entry.entry_type,
+                entry.positive,
+                entry.negative,
+                entry.belief,
+                entry.disbelief,
+                entry.uncertainty,
+                entry.base_rate,
+                entry.timestamp,
+                entry.rule_name,
+                json.dumps(entry.metadata) if entry.metadata else None,
+            ),
+        )
+        await conn.commit()
+        return entry.event_id
 
     def _row_to_entry(self, row: Any) -> EvidenceLedgerEntry:
         return EvidenceLedgerEntry(
-            event_id=row[0],
-            agent_id=row[1],
-            authority_id=row[2],
-            entry_type=row[3],
-            positive=row[4] or 0.0,
-            negative=row[5] or 0.0,
-            belief=row[6],
-            disbelief=row[7],
-            uncertainty=row[8],
-            base_rate=row[9],
-            timestamp=row[10],
-            rule_name=row[11],
-            metadata=json.loads(row[12]) if row[12] else {},
+            event_id=row["event_id"],
+            agent_id=row["agent_id"],
+            authority_id=row["authority_id"],
+            entry_type=row["entry_type"],
+            positive=row["positive"] or 0.0,
+            negative=row["negative"] or 0.0,
+            belief=row["belief"],
+            disbelief=row["disbelief"],
+            uncertainty=row["uncertainty"],
+            base_rate=row["base_rate"],
+            timestamp=row["timestamp"],
+            rule_name=row["rule_name"],
+            metadata=json.loads(row["metadata"]) if row["metadata"] else {},
         )
 
+    @store_op("Failed to query evidence")
     async def query(
         self,
         agent_id: str,
@@ -119,82 +119,76 @@ class SQLiteEvidenceLedger:
         since: float | None = None,
         limit: int | None = None,
     ) -> list[EvidenceLedgerEntry]:
-        try:
-            conn = await self._ensure_table()
-            sql = (
-                "SELECT event_id, agent_id, authority_id, entry_type, "
-                "positive, negative, belief, disbelief, uncertainty, base_rate, "
-                "timestamp, rule_name, metadata "
-                "FROM evidence_log WHERE agent_id = ?"
-            )
-            params: list[Any] = [agent_id]
+        conn = await self._ensure_table()
+        sql = (
+            "SELECT event_id, agent_id, authority_id, entry_type, "
+            "positive, negative, belief, disbelief, uncertainty, base_rate, "
+            "timestamp, rule_name, metadata "
+            "FROM evidence_log WHERE agent_id = ?"
+        )
+        params: list[Any] = [agent_id]
 
-            if authority_id is not None:
-                sql += " AND authority_id = ?"
-                params.append(authority_id)
-            if since is not None:
-                sql += " AND timestamp >= ?"
-                params.append(since)
+        if authority_id is not None:
+            sql += " AND authority_id = ?"
+            params.append(authority_id)
+        if since is not None:
+            sql += " AND timestamp >= ?"
+            params.append(since)
 
-            sql += " ORDER BY timestamp ASC"
+        sql += " ORDER BY timestamp ASC"
 
-            if limit is not None:
-                sql += " LIMIT ?"
-                params.append(limit)
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
 
-            async with conn.execute(sql, params) as cursor:
-                rows = await cursor.fetchall()
-            return [self._row_to_entry(row) for row in rows]
-        except Exception as exc:
-            raise StoreError(f"Failed to query evidence for {agent_id!r}") from exc
+        async with conn.execute(sql, params) as cursor:
+            rows = await cursor.fetchall()
+        return [self._row_to_entry(row) for row in rows]
 
+    @store_op("Failed to compute evidence summary")
     async def summary(self, agent_id: str) -> dict[str, Any]:
-        try:
-            conn = await self._ensure_table()
-            async with conn.execute(
-                """
-                SELECT
-                    COUNT(*) as cnt,
-                    COALESCE(SUM(positive), 0) as total_pos,
-                    COALESCE(SUM(negative), 0) as total_neg,
-                    COUNT(DISTINCT authority_id) as dist_auth,
-                    COUNT(DISTINCT rule_name) as dist_rules,
-                    MIN(timestamp) as earliest,
-                    MAX(timestamp) as latest
-                FROM evidence_log WHERE agent_id = ?
-                """,
-                (agent_id,),
-            ) as cursor:
-                row = await cursor.fetchone()
+        conn = await self._ensure_table()
+        async with conn.execute(
+            """
+            SELECT
+                COUNT(*) as cnt,
+                COALESCE(SUM(positive), 0) as total_pos,
+                COALESCE(SUM(negative), 0) as total_neg,
+                COUNT(DISTINCT authority_id) as dist_auth,
+                COUNT(DISTINCT rule_name) as dist_rules,
+                MIN(timestamp) as earliest,
+                MAX(timestamp) as latest
+            FROM evidence_log WHERE agent_id = ?
+            """,
+            (agent_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
 
-            if row is None or row[0] == 0:
-                return {
-                    "total_evidence_count": 0,
-                    "total_positive": 0.0,
-                    "total_negative": 0.0,
-                    "distinct_authorities": 0,
-                    "distinct_rules": 0,
-                    "earliest_evidence": 0.0,
-                    "latest_evidence": 0.0,
-                }
-
+        if row is None or row["cnt"] == 0:
             return {
-                "total_evidence_count": row[0],
-                "total_positive": row[1],
-                "total_negative": row[2],
-                "distinct_authorities": row[3],
-                "distinct_rules": row[4],
-                "earliest_evidence": row[5],
-                "latest_evidence": row[6],
+                "total_evidence_count": 0,
+                "total_positive": 0.0,
+                "total_negative": 0.0,
+                "distinct_authorities": 0,
+                "distinct_rules": 0,
+                "earliest_evidence": 0.0,
+                "latest_evidence": 0.0,
             }
-        except Exception as exc:
-            raise StoreError(f"Failed to get evidence summary for {agent_id!r}") from exc
 
+        return {
+            "total_evidence_count": row["cnt"],
+            "total_positive": row["total_pos"],
+            "total_negative": row["total_neg"],
+            "distinct_authorities": row["dist_auth"],
+            "distinct_rules": row["dist_rules"],
+            "earliest_evidence": row["earliest"],
+            "latest_evidence": row["latest"],
+        }
+
+    @store_op("Failed to close SQLite ledger connection")
     async def close(self) -> None:
         if self._conn is not None:
             try:
                 await self._conn.close()
-            except Exception as exc:
-                raise StoreError("Failed to close SQLite ledger connection") from exc
             finally:
                 self._conn = None

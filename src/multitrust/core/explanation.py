@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from multitrust.core.opinion import Opinion
@@ -19,12 +19,7 @@ class TrustProjection:
     projected_trust: float
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "horizon_label": self.horizon_label,
-            "elapsed_seconds": self.elapsed_seconds,
-            "projected_opinion": self.projected_opinion.to_dict(),
-            "projected_trust": self.projected_trust,
-        }
+        return asdict(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,16 +36,7 @@ class EvidenceContribution:
     impact_method: str  # "heuristic" | "leave_one_out"
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "authority_id": self.authority_id,
-            "rule_name": self.rule_name,
-            "positive_total": self.positive_total,
-            "negative_total": self.negative_total,
-            "evidence_count": self.evidence_count,
-            "last_submitted": self.last_submitted,
-            "impact_score": self.impact_score,
-            "impact_method": self.impact_method,
-        }
+        return asdict(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,15 +52,7 @@ class EvidenceSummary:
     latest_evidence: float
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "total_evidence_count": self.total_evidence_count,
-            "total_positive": self.total_positive,
-            "total_negative": self.total_negative,
-            "distinct_authorities": self.distinct_authorities,
-            "distinct_rules": self.distinct_rules,
-            "earliest_evidence": self.earliest_evidence,
-            "latest_evidence": self.latest_evidence,
-        }
+        return asdict(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,14 +67,7 @@ class DecayInfo:
     trust_if_decayed_now: float
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "enabled": self.enabled,
-            "half_life_seconds": self.half_life_seconds,
-            "seconds_since_last_update": self.seconds_since_last_update,
-            "current_decay_factor": self.current_decay_factor,
-            "opinion_if_decayed_now": self.opinion_if_decayed_now.to_dict(),
-            "trust_if_decayed_now": self.trust_if_decayed_now,
-        }
+        return asdict(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,17 +85,7 @@ class DecisionExplanation:
     rationale: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "action": self.action,
-            "basis": self.basis,
-            "threshold": self.threshold,
-            "trust_score": self.trust_score,
-            "margin": self.margin,
-            "policy_name": self.policy_name,
-            "rule_name": self.rule_name,
-            "evidence_needed": self.evidence_needed,
-            "rationale": self.rationale,
-        }
+        return asdict(self)
 
 
 @dataclass(frozen=True, slots=True)

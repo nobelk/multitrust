@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from multitrust.core.errors import ConcurrencyError, StoreError
 from multitrust.core.trust_record import TrustRecord
+from multitrust.storage._errors import store_op
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
@@ -153,41 +154,35 @@ class RedisTrustStore:
         result = await self.get_versioned(agent_id)
         return None if result is None else result[0]
 
+    @store_op("Failed to get trust record")
     async def get_versioned(self, agent_id: str) -> tuple[TrustRecord, int] | None:
-        try:
-            client = await self._ensure_client()
-            # redis-py 7.x types hmget as returning Awaitable | sync, so cast.
-            coro = cast(
-                "Awaitable[list[Any]]",
-                client.hmget(self._key(agent_id), ["data", "version"]),
-            )
-            raw = await coro
-            data, version = raw[0], raw[1]
-            if data is None or version is None:
-                return None
-            record = TrustRecord.from_dict(json.loads(data))
-            return record, int(version)
-        except Exception as exc:
-            if isinstance(exc, StoreError):
-                raise
-            raise StoreError(f"Failed to get record for {agent_id!r}") from exc
+        client = await self._ensure_client()
+        # redis-py 7.x types hmget as returning Awaitable | sync, so cast.
+        coro = cast(
+            "Awaitable[list[Any]]",
+            client.hmget(self._key(agent_id), ["data", "version"]),
+        )
+        raw = await coro
+        data, version = raw[0], raw[1]
+        if data is None or version is None:
+            return None
+        record = TrustRecord.from_dict(json.loads(data))
+        return record, int(version)
 
+    @store_op("Failed to put trust record")
     async def put(self, record: TrustRecord) -> None:
         """Unconditional write (last-write-wins).
 
         Bumps the stored version by 1; creates it at 1 if absent. Use
         :meth:`put_if_version` when you need to detect concurrent writes.
         """
-        try:
-            client = await self._ensure_client()
-            data = json.dumps(record.to_dict())
-            # Simple HSET + HINCRBY in a pipeline — atomic per-key.
-            async with client.pipeline(transaction=True) as pipe:
-                pipe.hset(self._key(record.agent_id), "data", data)
-                pipe.hincrby(self._key(record.agent_id), "version", 1)
-                await pipe.execute()
-        except Exception as exc:
-            raise StoreError(f"Failed to put record for {record.agent_id!r}") from exc
+        client = await self._ensure_client()
+        data = json.dumps(record.to_dict())
+        # Simple HSET + HINCRBY in a pipeline — atomic per-key.
+        async with client.pipeline(transaction=True) as pipe:
+            pipe.hset(self._key(record.agent_id), "data", data)
+            pipe.hincrby(self._key(record.agent_id), "version", 1)
+            await pipe.execute()
 
     async def put_if_version(self, record: TrustRecord, expected_version: int) -> int:
         """Conditional write. Returns the new version on success.
@@ -209,7 +204,7 @@ class RedisTrustStore:
                     args=[expected_version, data],
                 ),
             )
-        except ConcurrencyError:
+        except StoreError:
             raise
         except Exception as exc:
             raise StoreError(f"Failed to put record for {record.agent_id!r}") from exc
@@ -225,13 +220,11 @@ class RedisTrustStore:
             )
         return int(result[0])
 
+    @store_op("Failed to delete trust record")
     async def delete(self, agent_id: str) -> bool:
-        try:
-            client = await self._ensure_client()
-            removed = await client.delete(self._key(agent_id))
-            return bool(removed)
-        except Exception as exc:
-            raise StoreError(f"Failed to delete record for {agent_id!r}") from exc
+        client = await self._ensure_client()
+        removed = await client.delete(self._key(agent_id))
+        return bool(removed)
 
     async def delete_if_version(self, agent_id: str, expected_version: int) -> bool:
         """Conditional delete. Returns True if removed, False if absent.
@@ -263,26 +256,22 @@ class RedisTrustStore:
             )
         return int(cast(int, result)) == 1
 
+    @store_op("Failed to list agents")
     async def list_agents(self) -> list[str]:
-        try:
-            client = await self._ensure_client()
-            prefix = f"{self._namespace}:trust:"
-            match = f"{prefix}*"
-            agents: list[str] = []
-            async for key in client.scan_iter(match=match, count=500):
-                key_str = key.decode() if isinstance(key, bytes) else key
-                agents.append(cast(str, key_str)[len(prefix) :])
-            return agents
-        except Exception as exc:
-            raise StoreError("Failed to list agents") from exc
+        client = await self._ensure_client()
+        prefix = f"{self._namespace}:trust:"
+        match = f"{prefix}*"
+        agents: list[str] = []
+        async for key in client.scan_iter(match=match, count=500):
+            key_str = key.decode() if isinstance(key, bytes) else key
+            agents.append(cast(str, key_str)[len(prefix) :])
+        return agents
 
+    @store_op("Failed to check trust record existence")
     async def exists(self, agent_id: str) -> bool:
-        try:
-            client = await self._ensure_client()
-            count = await client.exists(self._key(agent_id))
-            return bool(count)
-        except Exception as exc:
-            raise StoreError(f"Failed to check existence for {agent_id!r}") from exc
+        client = await self._ensure_client()
+        count = await client.exists(self._key(agent_id))
+        return bool(count)
 
     async def close(self) -> None:
         if self._client is None or not self._owns_client:

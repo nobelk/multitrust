@@ -14,6 +14,24 @@ class EvidenceCollector(Protocol):
     async def collect(self, agent_id: str, context: dict[str, Any]) -> list[Evidence]: ...
 
 
+def _evidence_from_result(
+    *,
+    agent_id: str,
+    authority_id: str,
+    result: EvidenceResult,
+    rule_name: str | None,
+) -> Evidence:
+    return Evidence(
+        agent_id=agent_id,
+        authority_id=authority_id,
+        positive=result.positive,
+        negative=result.negative,
+        timestamp=time.time(),
+        rule_name=rule_name,
+        metadata=result.metadata,
+    )
+
+
 class RuleBasedCollector:
     """Collects evidence by running EvidenceRules against a context dict."""
 
@@ -29,18 +47,15 @@ class RuleBasedCollector:
 
     async def collect(self, agent_id: str, context: dict[str, Any]) -> list[Evidence]:
         results: list[EvidenceResult] = self._engine.evaluate(context)
-        evidences = []
-        for result in results:
-            evidence = Evidence(
+        return [
+            _evidence_from_result(
                 agent_id=agent_id,
                 authority_id=self.authority_id,
-                positive=result.positive,
-                negative=result.negative,
-                timestamp=time.time(),
-                metadata=result.metadata,
+                result=result,
+                rule_name=None,
             )
-            evidences.append(evidence)
-        return evidences
+            for result in results
+        ]
 
 
 class CallbackCollector:
@@ -66,19 +81,13 @@ class CallbackCollector:
         raw_results = await asyncio.gather(
             *(cb(agent_id, context) for cb in self._callbacks.values())
         )
-        evidences = []
-        for name, result in zip(names, raw_results, strict=True):
-            if result is None:
-                continue
-            evidences.append(
-                Evidence(
-                    agent_id=agent_id,
-                    authority_id=self.authority_id,
-                    positive=result.positive,
-                    negative=result.negative,
-                    timestamp=time.time(),
-                    rule_name=name,
-                    metadata=result.metadata,
-                )
+        return [
+            _evidence_from_result(
+                agent_id=agent_id,
+                authority_id=self.authority_id,
+                result=result,
+                rule_name=name,
             )
-        return evidences
+            for name, result in zip(names, raw_results, strict=True)
+            if result is not None
+        ]

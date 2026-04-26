@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, fields
 from typing import Any
 
 from multitrust.core.errors import InvalidOpinionError
+
+_OPINION_EQ_TOL = 1e-9
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,14 +21,10 @@ class Opinion:
             raise InvalidOpinionError(
                 f"belief + disbelief + uncertainty must equal 1.0, got {total}"
             )
-        for name, val in [
-            ("belief", self.belief),
-            ("disbelief", self.disbelief),
-            ("uncertainty", self.uncertainty),
-            ("base_rate", self.base_rate),
-        ]:
-            if val < 0.0 or val > 1.0:
-                raise InvalidOpinionError(f"{name} must be in [0, 1], got {val}")
+        for f in fields(self):
+            val = getattr(self, f.name)
+            if not 0.0 <= val <= 1.0:
+                raise InvalidOpinionError(f"{f.name} must be in [0, 1], got {val}")
 
     @property
     def trustworthiness(self) -> float:
@@ -62,12 +60,7 @@ class Opinion:
         return cls(b, d, u, base_rate)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "belief": self.belief,
-            "disbelief": self.disbelief,
-            "uncertainty": self.uncertainty,
-            "base_rate": self.base_rate,
-        }
+        return asdict(self)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Opinion:
@@ -82,10 +75,10 @@ class Opinion:
         if not isinstance(other, Opinion):
             return NotImplemented
         return (
-            abs(self.belief - other.belief) <= 1e-9
-            and abs(self.disbelief - other.disbelief) <= 1e-9
-            and abs(self.uncertainty - other.uncertainty) <= 1e-9
-            and abs(self.base_rate - other.base_rate) <= 1e-9
+            abs(self.belief - other.belief) <= _OPINION_EQ_TOL
+            and abs(self.disbelief - other.disbelief) <= _OPINION_EQ_TOL
+            and abs(self.uncertainty - other.uncertainty) <= _OPINION_EQ_TOL
+            and abs(self.base_rate - other.base_rate) <= _OPINION_EQ_TOL
         )
 
     def __hash__(self) -> int:

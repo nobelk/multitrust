@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from multitrust.core._validators import check_unit
 from multitrust.core.opinion import Opinion
 
 Decision = Literal["allow", "block"]
@@ -49,8 +50,7 @@ class DecisionExpectation:
     def __post_init__(self) -> None:
         if self.at_seconds < 0:
             raise ValueError(f"at_seconds must be non-negative, got {self.at_seconds}")
-        if not 0.0 <= self.threshold <= 1.0:
-            raise ValueError(f"threshold must be in [0, 1], got {self.threshold}")
+        check_unit("threshold", self.threshold)
         if self.expected not in ("allow", "block"):
             raise ValueError(f"expected must be 'allow' or 'block', got {self.expected!r}")
 
@@ -73,8 +73,7 @@ class ScenarioCase:
     def __post_init__(self) -> None:
         if not self.case_id:
             raise ValueError("case_id must be non-empty")
-        if not 0.0 <= self.base_rate <= 1.0:
-            raise ValueError(f"base_rate must be in [0, 1], got {self.base_rate}")
+        check_unit("base_rate", self.base_rate)
         if self.prior_weight <= 0:
             raise ValueError(f"prior_weight must be positive, got {self.prior_weight}")
         if self.half_life_seconds is not None and self.half_life_seconds <= 0:

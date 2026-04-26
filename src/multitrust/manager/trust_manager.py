@@ -5,7 +5,8 @@ import contextlib
 import math
 import threading
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager
 from typing import Any
 
 from multitrust.config.settings import MultiTrustConfig
@@ -82,25 +83,71 @@ class TrustManager:
         self._on_trust_updated = on_trust_updated
         self._on_evidence_submitted = on_evidence_submitted
         self._asyncio_lock = asyncio.Lock()
-        self._thread_lock: threading.Lock | None = threading.Lock() if thread_safe else None
+        self._thread_lock_cm: AbstractContextManager[Any] = (
+            threading.Lock() if thread_safe else contextlib.nullcontext()
+        )
         self._fusion_fn = fusion_fn if fusion_fn is not None else cumulative_fusion
         self._discount_fn = discount_fn if discount_fn is not None else discount_opinion
         self._event_bus = event_bus
         self._evidence_ledger = evidence_ledger
 
-    @contextlib.contextmanager
-    def _acquire_thread_lock(self) -> Iterator[None]:
-        """Acquire the thread lock if thread_safe=True, otherwise no-op."""
-        if self._thread_lock is not None:
-            with self._thread_lock:
-                yield
-        else:
-            yield
+    def _vacuous(self) -> Opinion:
+        return Opinion.vacuous(base_rate=self._config.default_base_rate)
 
     async def _emit(self, event: TrustEvent) -> None:
         """Emit an event if an event bus is configured."""
         if self._event_bus is not None:
             await self._event_bus.emit(event)
+
+    async def _emit_trust_updated(self, record: TrustRecord, old_trust: float) -> None:
+        """Fire the on_trust_updated callback then emit a TrustUpdatedEvent.
+
+        Order matters: callbacks run synchronously before the async event so
+        observers see the update in the same order regardless of bus latency.
+        """
+        if self._on_trust_updated is not None:
+            self._on_trust_updated(record)
+        await self._emit(
+            TrustUpdatedEvent(
+                event_type="trust_updated",
+                agent_id=record.agent_id,
+                old_trust=old_trust,
+                new_trust=record.trustworthiness,
+            )
+        )
+
+    @staticmethod
+    def _threshold_direction(old_trust: float, new_trust: float, threshold: float) -> str | None:
+        """Return ``"above"``/``"below"`` if a threshold crossing occurred."""
+        if old_trust < threshold <= new_trust:
+            return "above"
+        if new_trust < threshold <= old_trust:
+            return "below"
+        return None
+
+    async def _ledger_append(
+        self,
+        *,
+        agent_id: str,
+        authority_id: str,
+        entry_type: str,
+        positive: float = 0.0,
+        negative: float = 0.0,
+        **extra: Any,
+    ) -> None:
+        """Append an evidence ledger entry, no-op if no ledger is configured."""
+        if self._evidence_ledger is None:
+            return
+        await self._evidence_ledger.append(
+            EvidenceLedgerEntry(
+                agent_id=agent_id,
+                authority_id=authority_id,
+                entry_type=entry_type,
+                positive=positive,
+                negative=negative,
+                **extra,
+            )
+        )
 
     async def register_agent(
         self,
@@ -109,16 +156,12 @@ class TrustManager:
         initial_opinion: Opinion | None = None,
         **kwargs: object,
     ) -> TrustRecord:
-        with self._acquire_thread_lock():
+        with self._thread_lock_cm:
             async with self._asyncio_lock:
                 existing = await self._store.get(agent_id)
                 if existing is not None:
                     return existing
-                opinion = (
-                    initial_opinion
-                    if initial_opinion is not None
-                    else Opinion.vacuous(base_rate=self._config.default_base_rate)
-                )
+                opinion = initial_opinion if initial_opinion is not None else self._vacuous()
                 record = TrustRecord(
                     agent_id=agent_id,
                     opinion=opinion,
@@ -148,7 +191,7 @@ class TrustManager:
                     "gen_ai.trust.evidence.negative": evidence.negative,
                 },
             ) as span,
-            self._acquire_thread_lock(),
+            self._thread_lock_cm,
         ):
             async with self._asyncio_lock:
                 if self._on_evidence_submitted is not None:
@@ -157,7 +200,7 @@ class TrustManager:
                 record = await self._store.get(evidence.agent_id)
                 if record is None:
                     # Auto-register with vacuous opinion
-                    opinion = Opinion.vacuous(base_rate=self._config.default_base_rate)
+                    opinion = self._vacuous()
                     record = TrustRecord(agent_id=evidence.agent_id, opinion=opinion)
 
                 old_trust = record.trustworthiness
@@ -180,19 +223,16 @@ class TrustManager:
 
                 await self._store.put(record)
 
-                # Record in evidence ledger if configured
-                if self._evidence_ledger is not None:
-                    ledger_entry = EvidenceLedgerEntry(
-                        agent_id=evidence.agent_id,
-                        authority_id=evidence.authority_id,
-                        entry_type="evidence",
-                        positive=evidence.positive,
-                        negative=evidence.negative,
-                        timestamp=evidence.timestamp,
-                        rule_name=evidence.rule_name,
-                        metadata=dict(evidence.metadata),
-                    )
-                    await self._evidence_ledger.append(ledger_entry)
+                await self._ledger_append(
+                    agent_id=evidence.agent_id,
+                    authority_id=evidence.authority_id,
+                    entry_type="evidence",
+                    positive=evidence.positive,
+                    negative=evidence.negative,
+                    timestamp=evidence.timestamp,
+                    rule_name=evidence.rule_name,
+                    metadata=dict(evidence.metadata),
+                )
 
                 if self._on_trust_updated is not None:
                     self._on_trust_updated(record)
@@ -220,22 +260,14 @@ class TrustManager:
                     span.set_attribute("gen_ai.trust.evidence.count", record.evidence_count)
 
                 threshold = self._config.trust_threshold
-                if old_trust < threshold <= record.trustworthiness:
+                direction = self._threshold_direction(old_trust, record.trustworthiness, threshold)
+                if direction is not None:
                     await self._emit(
                         TrustThresholdCrossedEvent(
                             event_type="trust_threshold_crossed",
                             agent_id=evidence.agent_id,
                             threshold=threshold,
-                            direction="above",
-                        )
-                    )
-                elif old_trust >= threshold > record.trustworthiness:
-                    await self._emit(
-                        TrustThresholdCrossedEvent(
-                            event_type="trust_threshold_crossed",
-                            agent_id=evidence.agent_id,
-                            threshold=threshold,
-                            direction="below",
+                            direction=direction,
                         )
                     )
 
@@ -266,12 +298,12 @@ class TrustManager:
                     "gen_ai.trust.authority_count": len(authority_opinions),
                 },
             ) as span,
-            self._acquire_thread_lock(),
+            self._thread_lock_cm,
         ):
             async with self._asyncio_lock:
                 record = await self._store.get(agent_id)
                 if record is None:
-                    opinion = Opinion.vacuous(base_rate=self._config.default_base_rate)
+                    opinion = self._vacuous()
                     record = TrustRecord(agent_id=agent_id, opinion=opinion)
 
                 old_trust = record.trustworthiness
@@ -288,17 +320,7 @@ class TrustManager:
                     record.updated_at = time.time()
                     await self._store.put(record)
 
-                if self._on_trust_updated is not None:
-                    self._on_trust_updated(record)
-
-                await self._emit(
-                    TrustUpdatedEvent(
-                        event_type="trust_updated",
-                        agent_id=agent_id,
-                        old_trust=old_trust,
-                        new_trust=record.trustworthiness,
-                    )
-                )
+                await self._emit_trust_updated(record, old_trust)
 
                 if span is not None:
                     span.set_attribute("gen_ai.trust.old_score", old_trust)
@@ -318,11 +340,11 @@ class TrustManager:
         Acquires both thread and async locks, updates evidence counters,
         fires callbacks, and stores the updated record.
         """
-        with self._acquire_thread_lock():
+        with self._thread_lock_cm:
             async with self._asyncio_lock:
                 record = await self._store.get(agent_id)
                 if record is None:
-                    opinion = Opinion.vacuous(base_rate=self._config.default_base_rate)
+                    opinion = self._vacuous()
                     record = TrustRecord(agent_id=agent_id, opinion=opinion)
 
                 fused = self._fusion_fn(record.opinion, discounted_opinion)
@@ -334,20 +356,17 @@ class TrustManager:
 
                 await self._store.put(record)
 
-                # Record discounted opinion in ledger (distinct entry_type)
-                if self._evidence_ledger is not None:
-                    ledger_entry = EvidenceLedgerEntry(
-                        agent_id=agent_id,
-                        authority_id="distributed",
-                        entry_type="discounted_opinion",
-                        positive=positive,
-                        negative=negative,
-                        belief=discounted_opinion.belief,
-                        disbelief=discounted_opinion.disbelief,
-                        uncertainty=discounted_opinion.uncertainty,
-                        base_rate=discounted_opinion.base_rate,
-                    )
-                    await self._evidence_ledger.append(ledger_entry)
+                await self._ledger_append(
+                    agent_id=agent_id,
+                    authority_id="distributed",
+                    entry_type="discounted_opinion",
+                    positive=positive,
+                    negative=negative,
+                    belief=discounted_opinion.belief,
+                    disbelief=discounted_opinion.disbelief,
+                    uncertainty=discounted_opinion.uncertainty,
+                    base_rate=discounted_opinion.base_rate,
+                )
 
                 if self._on_evidence_submitted is not None:
                     evidence = Evidence(
@@ -630,14 +649,14 @@ class TrustManager:
         # Ensure the flag is set even if the authority was already registered
         # as a plain agent previously.
         if not record.metadata.get(AUTHORITY_METADATA_FLAG):
-            with self._acquire_thread_lock():
+            with self._thread_lock_cm:
                 async with self._asyncio_lock:
                     record.metadata[AUTHORITY_METADATA_FLAG] = True
                     await self._store.put(record)
         return record
 
     async def deregister_agent(self, agent_id: str) -> bool:
-        with self._acquire_thread_lock():
+        with self._thread_lock_cm:
             return await self._store.delete(agent_id)
 
     async def apply_decay(self, half_life_seconds: float | None = None) -> int:
@@ -653,7 +672,7 @@ class TrustManager:
             count = 0
             now = time.time()
             for agent_id in agent_ids:
-                with self._acquire_thread_lock():
+                with self._thread_lock_cm:
                     async with self._asyncio_lock:
                         record = await self._store.get(agent_id)
                         if record is None:
@@ -687,7 +706,7 @@ class TrustManager:
         now = time.time()
         evicted = 0
         for agent_id in agent_ids:
-            with self._acquire_thread_lock():
+            with self._thread_lock_cm:
                 async with self._asyncio_lock:
                     record = await self._store.get(agent_id)
                     if record is None:
@@ -825,13 +844,9 @@ class TrustManager:
         new_opinion = (
             opinion
             if opinion is not None
-            else (
-                Opinion.dogmatic_trust()
-                if is_trusted
-                else Opinion.vacuous(base_rate=self._config.default_base_rate)
-            )
+            else (Opinion.dogmatic_trust() if is_trusted else self._vacuous())
         )
-        with self._acquire_thread_lock():
+        with self._thread_lock_cm:
             async with self._asyncio_lock:
                 record = await self._store.get(authority_id)
                 if record is None or not record.metadata.get(AUTHORITY_METADATA_FLAG):
@@ -858,7 +873,7 @@ class TrustManager:
         reason: str | None = None,
     ) -> bool:
         """Remove an authority. Raises AuthorityNotFoundError if not an authority."""
-        with self._acquire_thread_lock():
+        with self._thread_lock_cm:
             async with self._asyncio_lock:
                 record = await self._store.get(authority_id)
                 if record is None or not record.metadata.get(AUTHORITY_METADATA_FLAG):
@@ -937,7 +952,7 @@ class TrustManager:
         authority_set = set(snapshot.authorities)
         written_ids: list[str] = []
 
-        with self._acquire_thread_lock():
+        with self._thread_lock_cm:
             async with self._asyncio_lock:
                 if mode == "replace":
                     for existing_id in await self._store.list_agents():
@@ -978,12 +993,8 @@ class TrustManager:
         Preserves `created_at` and `metadata` (including authority flag).
         Bumps `updated_at`. Records an admin audit entry.
         """
-        new_opinion = (
-            opinion
-            if opinion is not None
-            else Opinion.vacuous(base_rate=self._config.default_base_rate)
-        )
-        with self._acquire_thread_lock():
+        new_opinion = opinion if opinion is not None else self._vacuous()
+        with self._thread_lock_cm:
             async with self._asyncio_lock:
                 record = await self._store.get(agent_id)
                 if record is None:
@@ -1074,7 +1085,7 @@ class TrustManager:
             )
         assert new_opinion is not None  # for mypy
 
-        with self._acquire_thread_lock():
+        with self._thread_lock_cm:
             async with self._asyncio_lock:
                 record = await self._store.get(agent_id)
                 if record is None:
