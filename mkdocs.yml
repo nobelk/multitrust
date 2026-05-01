@@ -1,0 +1,51 @@
+site_name: MultiTrust
+site_description: A trust framework SDK for multi-agent AI systems based on Subjective Logic.
+site_url: https://nobelk.github.io/multitrust/
+repo_url: https://github.com/nobelk/multitrust
+repo_name: nobelk/multitrust
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Developer design: dev_design.md
+  - Experimental API: exp_api.md
+
+# Internal planning docs live in docs/ alongside the site, but are not part
+# of the rendered site (yet). Keep them out of --strict's nav check.
+exclude_docs: |
+  improvement_plan2.md
+  simplification_plan.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.details

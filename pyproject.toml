@@ -61,6 +61,7 @@ dev = [
     "fakeredis>=2.35",
     "redis>=5.0",
     "lupa>=2.8",
+    "mkdocs-material>=9.5",
 ]
 
 [project.urls]
