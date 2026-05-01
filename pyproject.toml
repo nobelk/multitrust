@@ -47,8 +47,9 @@ crewai = ["crewai>=0.50"]
 openai = ["openai-agents>=0.1"]
 adk = ["google-adk>=0.1"]
 anthropic = ["anthropic>=0.30"]
+mcp = ["mcp>=1.0"]
 full = [
-    "multitrust[config,logging,otel,sqlite,redis,metrics,langgraph,crewai,openai,adk,anthropic]"
+    "multitrust[config,logging,otel,sqlite,redis,metrics,langgraph,crewai,openai,adk,anthropic,mcp]"
 ]
 dev = [
     "pytest>=9.0",
