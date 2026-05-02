@@ -32,25 +32,26 @@ with non-public symbols hidden or relocated.
 Goal: close the high-priority items in `simplification_plan.md` that touch
 the soon-to-freeze public surface.
 
-- [ ] Review `simplification_plan.md`; tag each item as
+- [x] Review `simplification_plan.md`; tag each item as
       touches-public-surface or cosmetic
-- [ ] Implement only the touches-public-surface items
-- [ ] Strike through resolved items in `simplification_plan.md` (don't
+- [x] Implement only the touches-public-surface items
+- [x] Strike through resolved items in `simplification_plan.md` (don't
       delete — preserve history per the project's roadmap convention)
-- [ ] Note deferred items inline with a one-line reason
+- [x] Note deferred items inline with a one-line reason
 
 ## 4. Tier 1 contract tests (Task 0.4)
 
 Goal: a `tests/contracts/` directory with a written contract spec and green
 tests for LangGraph and OpenAI Agents.
 
-- [ ] Resolve open question: contract spec format (markdown / pytest
-      fixtures / both)
-- [ ] Create `tests/contracts/` with a brief `README.md` (or equivalent
+- [x] Resolve open question: contract spec format (markdown / pytest
+      fixtures / both) — **resolved: both** (narrative `README.md` +
+      parametric `test_tier1_invariants.py`)
+- [x] Create `tests/contracts/` with a brief `README.md` (or equivalent
       spec doc) describing the contract every Tier 1 integration must satisfy
-- [ ] Author contract tests for LangGraph integration
-- [ ] Author contract tests for OpenAI Agents integration
-- [ ] Wire `tests/contracts/` into the existing CI matrix (Python 3.10, 3.11)
+- [x] Author contract tests for LangGraph integration
+- [x] Author contract tests for OpenAI Agents integration
+- [x] Wire `tests/contracts/` into the existing CI matrix (Python 3.10, 3.11)
 
 ## Sequencing notes
 

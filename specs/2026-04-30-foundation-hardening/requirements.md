@@ -60,11 +60,18 @@ See [`specs/roadmap.md`](../roadmap.md) Phase 0.
 
 ### Open questions
 
-- [ ] Format of `docs/api-surface.md` — hand-curated table, or auto-extracted
+- [x] Format of `docs/api-surface.md` — hand-curated table, or auto-extracted
       from `multitrust.__init__`? Resolve before Task 0.2 implementation.
-- [ ] Form of the per-integration "contract spec" referenced by Task 0.4 —
+      **Resolved:** hand-curated table — see `docs/api-surface.md`. Tagging
+      ("App"/"Integration"/"Review-before-1.0") needs human judgement that
+      auto-extraction can't provide.
+- [x] Form of the per-integration "contract spec" referenced by Task 0.4 —
       markdown narrative, pytest fixtures the integration must satisfy, or
       both? Resolve before Task 0.4 implementation.
+      **Resolved:** both — narrative spec in `tests/contracts/README.md`
+      (clauses C1–C7 with rationale) + parametric pytest enforcement in
+      `tests/contracts/test_tier1_invariants.py`. Per-integration files
+      cover adapter-shape clauses outside the cross-cutting baseline.
 
 ## References
 

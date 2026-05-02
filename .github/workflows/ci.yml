@@ -55,6 +55,13 @@ jobs:
       - name: Run tests with coverage
         run: uv run pytest --cov=src/multitrust --cov-report=xml --cov-report=term
 
+      - name: Tier 1 contract tests
+        # Re-run the contract suite as a dedicated step so Tier 1 contract
+        # regressions surface with a clearly labeled CI failure rather than
+        # being buried in the broader test step output. See
+        # tests/contracts/README.md for the contract spec.
+        run: uv run pytest tests/contracts/ -v
+
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v5

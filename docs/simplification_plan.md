@@ -1,5 +1,13 @@
 # MultiTrust `src/` Simplification Plan
 
+> **Phase 0 audit (2026-04-30):** Each item below is tagged
+> **[touches-public-surface]** or **[cosmetic]** per the Phase 0 spec
+> (`specs/2026-04-30-foundation-hardening/plan.md`, Task 0.3). Items that
+> touch the public surface (anything re-exported from `multitrust.__init__`
+> or used directly by such symbols) were resolved in this phase and are
+> ~~struck through~~. Cosmetic items are deferred to a later phase with a
+> one-line rationale.
+
 **Goal:** Reduce internal complexity in `src/multitrust/` while preserving:
 
 - The full public API (everything re-exported from `src/multitrust/__init__.py`).
@@ -33,7 +41,11 @@
 
 Estimated reduction: **~50 LOC**. Each item is a self-contained, ~10-minute refactor.
 
-### 1.1 Replace `_acquire_thread_lock` with `contextlib.nullcontext`
+### ~~1.1 Replace `_acquire_thread_lock` with `contextlib.nullcontext`~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. `_thread_lock_cm` is
+constructed once in `TrustManager.__init__` (`src/multitrust/manager/trust_manager.py:86-88`)
+and the helper is gone.
 
 **File:** `src/multitrust/manager/trust_manager.py:91-98`
 
@@ -63,7 +75,11 @@ Then call sites change from `with self._acquire_thread_lock():` to `with self._t
 
 **Caveat:** `threading.Lock()` cannot be reused as a CM after a single `with` block is exited only if it's re-entered concurrently from the same thread. `nullcontext` is reentrant. `threading.Lock()` is *not* recursive, but the existing code already assumes non-recursion. If the codebase ever needs re-entry, switch to `threading.RLock()`. Verify with the existing test suite.
 
-### 1.2 Extract `_default_opinion()` helper
+### ~~1.2 Extract `_default_opinion()` helper~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. `TrustManager._vacuous`
+exists (`src/multitrust/manager/trust_manager.py:94-95`) and is used at every
+prior duplication site.
 
 **File:** `src/multitrust/manager/trust_manager.py` — at least 5 sites repeat:
 ```python
@@ -86,7 +102,10 @@ opinion = initial_opinion if initial_opinion is not None else self._vacuous()
 
 Centralizing the construction also makes future changes (e.g., a per-agent base rate) a one-line edit.
 
-### 1.3 Replace manual range validation in `Opinion.__post_init__`
+### ~~1.3 Replace manual range validation in `Opinion.__post_init__`~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. `Opinion.__post_init__`
+walks `dataclasses.fields()` (`src/multitrust/core/opinion.py:18-27`).
 
 **File:** `src/multitrust/core/opinion.py:16-29`
 
@@ -108,7 +127,11 @@ def __post_init__(self) -> None:
 
 Saves ~6 lines and is idiomatic. The `0.0 <= val <= 1.0` chained comparison is more Pythonic than `val < 0.0 or val > 1.0`.
 
-### 1.4 Use `dataclasses.asdict()` for `to_dict()` where shapes match
+### ~~1.4 Use `dataclasses.asdict()` for `to_dict()` where shapes match~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. `Opinion.to_dict`
+delegates to `asdict` (`src/multitrust/core/opinion.py:62-63`); flat
+explanation/admin dataclasses follow the same pattern.
 
 **Files:**
 
@@ -126,6 +149,13 @@ def to_dict(self) -> dict[str, Any]:
 For dataclasses with nested `Opinion` or other complex fields, use a small custom converter via `asdict(self, dict_factory=...)` or hand-roll only the nested part. **Caveat:** `asdict` deep-copies nested dataclasses, which is fine here — but verify against tests that compare exact dict identity.
 
 ### 1.5 Remove redundant manual `__eq__`/`__hash__` from `Opinion`
+
+**Status:** **[touches-public-surface]** — PARTIAL / DEFERRED. Tolerance
+constant `_OPINION_EQ_TOL` is now extracted (`src/multitrust/core/opinion.py:8`),
+but the custom `__eq__`/`__hash__` are intentionally retained — removal would
+silently change floating-point equality semantics for any caller that relies
+on the ε-tolerance. Full removal deferred until a 1.0-blocking audit confirms
+no caller depends on it.
 
 **File:** `src/multitrust/core/opinion.py:81-92`
 
@@ -147,7 +177,12 @@ For dataclasses with nested `Opinion` or other complex fields, use a small custo
 
 Estimated reduction: **~50–60 LOC**. Touches 4 storage files — gate the phase on the test suite passing for each backend.
 
-### 2.1 Introduce `@store_op` decorator for try/except → `StoreError` wrapping
+### ~~2.1 Introduce `@store_op` decorator for try/except → `StoreError` wrapping~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. `store_op` lives in
+`src/multitrust/storage/_errors.py` and decorates every method on
+`SQLiteTrustStore`, `SQLiteEvidenceLedger`, and `RedisTrustStore`
+(public stores in `multitrust.storage`).
 
 **Files:**
 
@@ -203,11 +238,20 @@ def store_op(message: str) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, 
 
 ### 2.2 Inline trivial `_ensure_table`/`_ensure_connection` calls or unify them
 
+**Status:** **[cosmetic]** — DEFERRED. Original entry already resolves to
+"do not refactor"; left in plan as a guard against future contributors trying
+the merge.
+
 The `_ensure_*` helpers in `sqlite.py:28-42`, `sqlite_ledger.py`, and `redis_store.py` are similar. They could be merged into a base mixin — but the storage classes intentionally **do not share a base class** (they implement a Protocol). Keep them separate; this is honest duplication that improves coupling, not reduces it.
 
 **Action:** Document as "do not refactor" so future contributors don't try.
 
-### 2.3 Use `aiosqlite` `row_factory` to remove manual row-tuple unpacking
+### ~~2.3 Use `aiosqlite` `row_factory` to remove manual row-tuple unpacking~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. `_conn.row_factory =
+aiosqlite.Row` is set in `SQLiteEvidenceLedger._ensure_connection`
+(`src/multitrust/storage/sqlite_ledger.py:35`); `_row_to_entry` uses named
+column access.
 
 **File:** `src/multitrust/storage/sqlite_ledger.py:97-112` (`_row_to_entry`).
 
@@ -223,7 +267,11 @@ The `_ensure_*` helpers in `sqlite.py:28-42`, `sqlite_ledger.py`, and `redis_sto
 
 Estimated reduction: **~40 LOC**. Touches `manager/trust_manager.py` (the 1142-line file) only. Higher review cost — split into multiple PRs.
 
-### 3.1 Extract `_record_evidence_in_ledger()` helper
+### ~~3.1 Extract `_record_evidence_in_ledger()` helper~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. `TrustManager._ledger_append`
+(`src/multitrust/manager/trust_manager.py:128-150`) is now used by
+`submit_evidence`, `submit_discounted_opinion`, and admin paths.
 
 `submit_evidence`, `submit_batch`, and `merge_authority_opinions` each repeat the same `if self._evidence_ledger is not None: ... await self._evidence_ledger.append(...)` block with slightly different field combinations. Extract a helper:
 ```python
@@ -252,7 +300,11 @@ async def _ledger_append(
     )
 ```
 
-### 3.2 Extract `_threshold_direction()` helper
+### ~~3.2 Extract `_threshold_direction()` helper~~
+
+**Status:** **[touches-public-surface]** — RESOLVED.
+`TrustManager._threshold_direction` is a `@staticmethod`
+(`src/multitrust/manager/trust_manager.py:119-126`).
 
 The threshold-crossing logic at trust_manager.py lines ~222-240 is duplicated in `is_trusted` and elsewhere:
 ```python
@@ -268,7 +320,11 @@ def _threshold_direction(
 
 This becomes a static method (no `self` needed) and is independently unit-testable.
 
-### 3.3 Extract `_emit_trust_updated()` helper
+### ~~3.3 Extract `_emit_trust_updated()` helper~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. `_emit_trust_updated`
+(`src/multitrust/manager/trust_manager.py:102-117`) standardises ordering:
+sync callback first, then `TrustUpdatedEvent`.
 
 The "emit `TrustUpdatedEvent` + invoke `on_trust_updated` callback" pattern occurs in `submit_evidence`, `submit_batch`, `merge_authority_opinions`, `apply_decay`, and (transitively) in `register_agent`. Wrap into one helper called from all sites.
 
@@ -282,11 +338,18 @@ Estimated reduction: **~10 LOC**. Cosmetic; defer if Phase 1-3 absorbs review ba
 
 ### 4.1 `sync.py` — keep explicit signatures, simplify bodies only
 
+**Status:** **[cosmetic]** — DEFERRED. Original entry resolves to "no
+change" already; static-typing constraint is the binding reason.
+
 **Tempting but rejected:** Use `__getattr__` to forward all method calls dynamically. **Why rejected:** breaks mypy strict — IDE autocomplete and `Sync*Manager.x` static-typing both lose information.
 
 **Accepted:** Keep all 27 methods explicit, but since each one is just `return self._run(self._manager.X(args))`, there's little room left to simplify. The existing code is already minimal given the static-typing constraint. **Action:** No change beyond perhaps grouping related methods with section comments.
 
-### 4.2 Confirm `_run` thread-safety
+### ~~4.2 Confirm `_run` thread-safety~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. `SyncTrustManager.close()`
+(`src/multitrust/manager/sync.py:281-285`) stops the loop and joins the
+background thread; `__exit__` calls it.
 
 `SyncTrustManager._run` calls `asyncio.run_coroutine_threadsafe`. There's no shutdown logic for the background event loop — the daemon thread dies with the process. Add an explicit `close()` method for hygiene if not already present (verify first; if a `close` exists, ignore).
 
@@ -296,7 +359,11 @@ Estimated reduction: **~10 LOC**. Cosmetic; defer if Phase 1-3 absorbs review ba
 
 Estimated reduction: **~15 LOC**. Affects evaluation/scenario.py and similar.
 
-### 5.1 Consolidate `__post_init__` numeric validators
+### ~~5.1 Consolidate `__post_init__` numeric validators~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. `core/_validators.py`
+exports `check_unit`; `evaluation/scenario.py` imports and uses it for
+public dataclasses (`DecisionExpectation`, `EvaluationCorpus`).
 
 **Files:** `src/multitrust/evaluation/scenario.py:30-37, 49-55, 73-85` repeat manual range checks for floats in `[0,1]`.
 
@@ -320,7 +387,11 @@ def __post_init__(self) -> None:
 
 ## Phase 6 — Evidence & Integrations (small wins)
 
-### 6.1 De-duplicate Evidence construction in `evidence/collector.py`
+### ~~6.1 De-duplicate Evidence construction in `evidence/collector.py`~~
+
+**Status:** **[touches-public-surface]** — RESOLVED. Module-level
+`_evidence_from_result` (`src/multitrust/evidence/collector.py:17`) is used
+by both `RuleBasedCollector` and `CallbackCollector`.
 
 **File:** `src/multitrust/evidence/collector.py:30-43, 64-84`. Both `RuleBasedCollector.collect` and `CallbackCollector.collect` build `Evidence` from `EvidenceResult` with near-identical code.
 
@@ -343,6 +414,9 @@ def _evidence_from_result(
 Module-level helper, used by both classes. **Saves ~6 lines.**
 
 ### 6.2 Integrations (langgraph/, crewai/, openai_agents/, anthropic/, google_adk/)
+
+**Status:** **[cosmetic]** — DEFERRED. Original entry resolves to "do not
+factor a BaseIntegration"; parallelism is intentional documentation.
 
 These adapters are intentionally thin and parallel-structured. **Do not** attempt to factor a "BaseIntegration" — the parallelism is reader-facing documentation, not duplication. Skip.
 
@@ -371,6 +445,11 @@ The files in `src/multitrust/operators/` (`fusion.py`, `decay.py`, `discount.py`
 ---
 
 ## Execution Order & PR Strategy
+
+> **Phase 0 audit (2026-04-30):** All five rows below have landed on the
+> `spec/phase-0-foundation-hardening` branch as part of Tasks 1 and 2.
+> Table preserved for historical reference per the project's roadmap
+> convention (don't delete — strike through).
 
 Recommended PR sequence (each independently mergeable):
 
