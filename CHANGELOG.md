@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Phase 1 — Adoption & Onboarding** documentation surface:
+  - `docs/index.md` is now a five-minute quickstart landing page.
+  - `examples/quickstart.py`, `examples/multi_source_fusion.py`,
+    `examples/trust_decay.py`, and `examples/authority_discounting.py`
+    join `examples/hallucination_firewall.py` as runnable end-to-end
+    scenarios. A new `tests/examples/test_examples_smoke.py` imports
+    each example and awaits its `main()` so the docs stay pinned to
+    working code.
+  - `docs/examples.md` catalogs the runnable scenarios.
+  - `docs/cookbook/` adds five recipes — gating, drift,
+    decay-tuning, ledger-configuration, snapshot-restore — covering
+    the most common DEV questions per the Phase 1 exit criteria.
+  - `docs/versioning.md` is now the authoritative pre-1.0 / 1.0
+    stability story; `specs/tech-stack.md` cross-links to it.
+  - GitHub Actions workflow `.github/workflows/docs.yml` builds
+    `mkdocs --strict` on merges to `main` and deploys to GitHub
+    Pages. The README and `pyproject.toml` `[project.urls]` now point
+    callers at the published docs site.
 - **Admin & bulk operations on `TrustManager`** — operator-facing API for resetting,
   reseeding, and snapshotting trust state, plus authority lifecycle management:
   - `reset_agent` / `reset_agents` — revert an agent (or every agent) to a vacuous

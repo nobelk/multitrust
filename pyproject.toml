@@ -65,9 +65,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nobelk/multitrust"
+Homepage = "https://nobelk.github.io/multitrust/"
+Documentation = "https://nobelk.github.io/multitrust/"
 Repository = "https://github.com/nobelk/multitrust"
-Documentation = "https://github.com/nobelk/multitrust#readme"
 Changelog = "https://github.com/nobelk/multitrust/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/nobelk/multitrust/issues"
 

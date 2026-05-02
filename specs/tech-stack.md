@@ -104,6 +104,13 @@ Coverage is tracked but is not a gate — invariant tests for the math are. A dr
 
 ## Versioning & compatibility
 
+> **Authoritative reader-facing version of this section:** see
+> [`docs/versioning.md`](../docs/versioning.md). The bullets below are
+> the constitution-level summary; the docs page is what callers should
+> link to and read end-to-end. If the two ever diverge, the mission
+> [Stability commitments](mission.md#stability-commitments) section is
+> the source of truth.
+
 - **SemVer**, starting at 0.1.x today, headed for 1.0.
 - **Pre-1.0:** public API may change between minor versions; changes documented in `CHANGELOG.md`.
 - **Post-1.0:** breaking changes only at majors, after at least one minor release with a deprecation warning.
