@@ -55,6 +55,13 @@ jobs:
       - name: Run tests with coverage
         run: uv run pytest --cov=src/multitrust --cov-report=xml --cov-report=term
 
+      - name: Tier 1 contract tests
+        # Re-run the contract suite as a dedicated step so Tier 1 contract
+        # regressions surface with a clearly labeled CI failure rather than
+        # being buried in the broader test step output. See
+        # tests/contracts/README.md for the contract spec.
+        run: uv run pytest tests/contracts/ -v
+
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v5
@@ -80,3 +87,21 @@ jobs:
 
       - name: Verify wheel contents
         run: ls -lh dist/
+
+  docs:
+    name: Docs build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Build docs (strict)
+        run: uv run mkdocs build --strict
