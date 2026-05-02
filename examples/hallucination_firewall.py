@@ -124,9 +124,7 @@ async def run_pipeline() -> None:
 
         for round_num in range(1, NUM_ROUNDS + 1):
             # 1. Check trust gate BEFORE running fact-checker
-            fc_trusted = await manager.is_trusted(
-                "fact-checker", threshold=THRESHOLD
-            )
+            fc_trusted = await manager.is_trusted("fact-checker", threshold=THRESHOLD)
             gate_status = "OPEN" if fc_trusted else "BLOCKED"
 
             # 2. Researcher always runs (reliable)
@@ -154,10 +152,7 @@ async def run_pipeline() -> None:
                 )
                 validated = fc_result["validated"]
                 if fc_result["fabricated"]:
-                    detail = (
-                        "Fact-checker approved fabricated claims  "
-                        "\u26a0 quality degrading"
-                    )
+                    detail = "Fact-checker approved fabricated claims  \u26a0 quality degrading"
                 else:
                     detail = (
                         f"Fact-checker validated "
@@ -166,10 +161,7 @@ async def run_pipeline() -> None:
                     )
             else:
                 validated = [f"[unverified] {c}" for c in research["claims"]]
-                detail = (
-                    "Fact-checker untrusted \u2014 "
-                    "claims passed as [unverified]"
-                )
+                detail = "Fact-checker untrusted \u2014 claims passed as [unverified]"
                 gated_rounds.append(round_num)
 
             # 4. Summarizer always runs (reliable)
@@ -217,12 +209,8 @@ async def run_pipeline() -> None:
         assert fc_trust < THRESHOLD, (
             f"fact-checker trust should be < {THRESHOLD}, got {fc_trust:.3f}"
         )
-        assert r_trust > THRESHOLD, (
-            f"researcher trust should be > {THRESHOLD}, got {r_trust:.3f}"
-        )
-        assert s_trust > THRESHOLD, (
-            f"summarizer trust should be > {THRESHOLD}, got {s_trust:.3f}"
-        )
+        assert r_trust > THRESHOLD, f"researcher trust should be > {THRESHOLD}, got {r_trust:.3f}"
+        assert s_trust > THRESHOLD, f"summarizer trust should be > {THRESHOLD}, got {s_trust:.3f}"
         assert len(gated_rounds) >= 1, "at least one round should have been gated"
 
         for result in round_results:

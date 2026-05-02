@@ -34,6 +34,14 @@ theme:
 
 nav:
   - Home: index.md
+  - Examples: examples.md
+  - Cookbook:
+    - Gating: cookbook/gating.md
+    - Drift: cookbook/drift.md
+    - Decay tuning: cookbook/decay-tuning.md
+    - Ledger configuration: cookbook/ledger-configuration.md
+    - Snapshot & restore: cookbook/snapshot-restore.md
+  - Versioning: versioning.md
   - Public API surface: api-surface.md
   - Developer design: dev_design.md
   - Experimental API: exp_api.md
