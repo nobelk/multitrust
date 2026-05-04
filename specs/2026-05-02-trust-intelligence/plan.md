@@ -22,10 +22,16 @@ without breaking any existing `ThresholdPolicy` callsite.
 Goal: a pure, testable function that answers "has this agent's opinion
 moved meaningfully over a recent window?"
 
-- [ ] **Resolve open question first**: window semantics (count vs.
-      time) and return type (`DriftReport` vs. bool vs. score). Land
-      the decision in this file before writing code; update `requirements.md`
-      Open questions accordingly.
+- [x] **Resolved (2026-05-02)**: window is **count-based** over a
+      `Sequence[Opinion]` (callers do any time filtering up front, so
+      the helper stays I/O-free); return type is a **`DriftReport`
+      dataclass** carrying `drift_score`, `is_drifting`, `from_opinion`,
+      `to_opinion`, and `window_size`. A bool drops the magnitude
+      explanations need; a bare float pushes the threshold decision
+      onto every caller. Distance metric: **L1 over
+      `(belief, disbelief, uncertainty)`** — bounded in `[0, 2]`,
+      composes linearly with the existing operators, and gives
+      monotonicity property tests a clean target.
 - [ ] Create `src/multitrust/intelligence/__init__.py` with
       `detect_drift(history, ...)` as the only public symbol.
 - [ ] Implement using existing `Opinion` arithmetic — no new deps.

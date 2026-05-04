@@ -83,10 +83,12 @@ dependency-free core.
 
 ### Open questions
 
-- [ ] **Drift API shape.** Window expressed as record count (last N
-  opinions) or time delta (last T seconds)? Output a `DriftReport`
-  dataclass, a bool, or a numeric score? Resolve in `plan.md` task
-  group 2 before implementation begins.
+- [x] **Drift API shape (resolved 2026-05-02).** Count-based window
+  over `Sequence[Opinion]`; returns a `DriftReport` dataclass
+  (`drift_score`, `is_drifting`, `from_opinion`, `to_opinion`,
+  `window_size`). Distance metric is L1 over
+  `(belief, disbelief, uncertainty)`. Time-based filtering is a
+  caller-side concern so the helper has no I/O.
 - [ ] **Contributor-diff granularity.** Diff at the authority level,
   the evidence-source level, or both? Defer until 2.3 implementation
   is underway and we can see what the explanation surface needs.

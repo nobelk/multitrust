@@ -4,10 +4,40 @@ You suspect an agent's opinion is changing faster than it should — quality
 regression, an authority going off the rails, a flapping gate. You want
 to *see* the movement, not just the current score.
 
-The pattern below is a pure inspection over the
-[`EvidenceLedger`](ledger-configuration.md). Phase 2 of the roadmap adds
-a `multitrust.intelligence.detect_drift` helper that wraps this in one
-call; for now you assemble it yourself.
+Phase 2 ships `multitrust.intelligence.detect_drift` as a one-call
+helper for the common case. The hand-rolled ledger replay below is still
+useful when you need *per-step* trust trajectories rather than a single
+window summary.
+
+## The helper: `detect_drift`
+
+```python
+from multitrust import Opinion, detect_drift, evidence_to_opinion
+
+# A chronological history of opinions (oldest first).
+history = [
+    Opinion.vacuous(),
+    evidence_to_opinion(positive=3.0, negative=0.0),
+    evidence_to_opinion(positive=5.0, negative=0.0),
+    evidence_to_opinion(positive=5.0, negative=4.0),
+]
+
+report = detect_drift(history, threshold=0.3)
+print(report.drift_score, report.is_drifting)
+# `from_opinion` is the window anchor; `to_opinion` is the latest opinion.
+```
+
+Pass `window=N` to compare against the `N`-step-ago opinion instead of
+the very first entry. The function takes nothing but data — no clock,
+no I/O — so callers compose it freely into their own monitoring loops.
+Distance is L1 over `(belief, disbelief, uncertainty)`, bounded in
+`[0, 2]`.
+
+## The hand-rolled pattern
+
+The replay below is a pure inspection over the
+[`EvidenceLedger`](ledger-configuration.md). Reach for it when you want
+the *full trajectory* rather than a single drift score.
 
 ## Snippet
 
@@ -67,13 +97,14 @@ async with TrustManager(evidence_ledger=ledger) as manager:
   prefer storing per-step opinion snapshots in your own ledger entry
   metadata.
 
-## Why a helper API is coming
+## When to reach for which
 
-Hand-rolling drift is fine for one-off inspection, but production
-monitoring needs the same answer everywhere. Phase 2 ships
-`detect_drift` as a pure function over a `TrustRecord` history (no
-scheduling, no networking — see roadmap Phase 2). The shape above is
-deliberately what that helper will return.
+- **`detect_drift`** for "did this agent drift more than X over the
+  last N steps?" Single number, structured report, ready for a gate.
+- **The replay pattern** when you need every intermediate value — for
+  charts, debugging, or reconstructing the exact moment a regression
+  began. The pure helper deliberately returns only window endpoints to
+  keep its surface narrow.
 
 ## What to read next
 

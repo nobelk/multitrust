@@ -112,7 +112,16 @@ document. Both directions matter:
 | `DistributedAuthority` | App | `TrustAuthority` whose opinions are discounted by its own trustworthiness. |
 | `TrustPolicy` | App | Classifies a trust score into a `TrustLevel`. |
 | `DecisionPolicy` | App | Simple allow/deny policy at a minimum-trust threshold. |
-| `ThresholdPolicy` | App | Async policy that reads the manager and compares to a threshold. |
+| `ThresholdPolicy` | App | Async policy that gates an agent on `min_trust` and (optionally) `max_uncertainty`; legacy `threshold=` keyword still accepted. |
+| `PolicyDecision` | App | Structured outcome of `ThresholdPolicy.evaluate()` — `allowed`, plus the rejection reason and the values that were checked. |
+
+### Intelligence (`multitrust.intelligence`)
+
+| Name | Tag | Purpose |
+| --- | --- | --- |
+| `detect_drift` | App | Pure helper — given a chronological `Sequence[Opinion]`, return a `DriftReport` describing how far the most recent opinion has moved relative to a window anchor (L1 distance over `(belief, disbelief, uncertainty)`). |
+| `DriftReport` | App | Structured outcome of `detect_drift` — `drift_score`, `is_drifting`, `from_opinion`, `to_opinion`, `window_size`, `threshold`. |
+| `DEFAULT_DRIFT_THRESHOLD` | App | Default L1 distance above which `detect_drift` flags drift (`0.2`). Exposed so callers can reference the same constant when overriding it. |
 
 ### Admin / bulk operations (`multitrust.manager.admin`)
 

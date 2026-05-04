@@ -67,8 +67,18 @@ class SyncTrustManager:
     def get_trust(self, agent_id: str) -> float:
         return self._run(self._manager.get_trust(agent_id))
 
-    def is_trusted(self, agent_id: str, *, threshold: float | None = None) -> bool:
-        return self._run(self._manager.is_trusted(agent_id, threshold=threshold))
+    def is_trusted(
+        self,
+        agent_id: str,
+        *,
+        threshold: float | None = None,
+        max_uncertainty: float | None = None,
+    ) -> bool:
+        return self._run(
+            self._manager.is_trusted(
+                agent_id, threshold=threshold, max_uncertainty=max_uncertainty
+            )
+        )
 
     def rank_agents(self, agent_ids: list[str] | None = None) -> list[tuple[str, float]]:
         return self._run(self._manager.rank_agents(agent_ids))

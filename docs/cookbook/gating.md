@@ -42,15 +42,37 @@ runs two reviewers through a `0.7` threshold gate; see
 [`examples/multi_source_fusion.py`](https://github.com/nobelk/multitrust/blob/main/examples/multi_source_fusion.py)
 for the exact wiring.
 
-## Coming in Phase 2
+## Gating on uncertainty (Phase 2)
 
-Mission principle 2 calls out *uncertainty as first-class*. Phase 2 of
-the [roadmap](https://github.com/nobelk/multitrust/blob/main/specs/roadmap.md)
-extends `ThresholdPolicy` with `max_uncertainty` so you can refuse a
-decision because *"I don't know enough"* — a different signal from
-*"belief is too low."* If you find yourself wanting to gate on
-`opinion.uncertainty` today, that is the right instinct; Phase 2 will
-make it a one-liner.
+Mission principle 2 calls out *uncertainty as first-class*. A high
+scalar trust on a vacuous opinion still means "I don't know enough" —
+which is a different decision from "belief is too low." `ThresholdPolicy`
+exposes both gates as a one-liner:
+
+```python
+from multitrust import ThresholdPolicy, TrustManager
+
+# Refuse a decision unless trust >= 0.6 AND uncertainty <= 0.3.
+policy = ThresholdPolicy(min_trust=0.6, max_uncertainty=0.3)
+
+async with TrustManager() as manager:
+    decision = await policy.evaluate(manager, "fact-checker")
+    if decision.allowed:
+        ...
+    else:
+        # `decision.reason` names the gate that failed:
+        #   "trust_below_min_trust" or "uncertainty_above_max_uncertainty"
+        log.info("blocked: %s", decision.reason)
+```
+
+The fast path also takes the new gate:
+
+```python
+await manager.is_trusted("fact-checker", threshold=0.6, max_uncertainty=0.3)
+```
+
+The legacy `ThresholdPolicy(threshold=0.6)` keyword still works
+unchanged for code written before Phase 2.
 
 ## What to read next
 
