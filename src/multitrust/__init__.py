@@ -44,8 +44,14 @@ from multitrust.evidence.collector import CallbackCollector, EvidenceCollector, 
 from multitrust.evidence.rules import EvidenceRule, RuleEngine
 from multitrust.integrations.generic.context import TrustContext
 from multitrust.integrations.generic.decorators import collect_evidence, trust_aware
+from multitrust.intelligence import DEFAULT_DRIFT_THRESHOLD, DriftReport, detect_drift
 from multitrust.manager.admin import ADMIN_AGENT_ID, AdminAction, TrustSnapshot
-from multitrust.manager.policy import DecisionPolicy, ThresholdPolicy, TrustPolicy
+from multitrust.manager.policy import (
+    DecisionPolicy,
+    PolicyDecision,
+    ThresholdPolicy,
+    TrustPolicy,
+)
 from multitrust.manager.sync import SyncTrustManager
 from multitrust.manager.timeline import TimelinePoint, TrustTimeline, generate_trust_timeline
 from multitrust.manager.trust_authority import DistributedAuthority, TrustAuthority
@@ -133,6 +139,7 @@ __all__ = [
     "TrustPolicy",
     "DecisionPolicy",
     "ThresholdPolicy",
+    "PolicyDecision",
     # Admin / bulk ops
     "AdminAction",
     "TrustSnapshot",
@@ -154,6 +161,10 @@ __all__ = [
     "RuleBasedCollector",
     "EvidenceRule",
     "RuleEngine",
+    # Intelligence
+    "detect_drift",
+    "DriftReport",
+    "DEFAULT_DRIFT_THRESHOLD",
     # Generic integrations
     "trust_aware",
     "collect_evidence",

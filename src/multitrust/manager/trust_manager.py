@@ -601,27 +601,69 @@ class TrustManager:
                 span.set_attribute("gen_ai.trust.score", score)
             return score
 
-    async def is_trusted(self, agent_id: str, *, threshold: float | None = None) -> bool:
+    async def is_trusted(
+        self,
+        agent_id: str,
+        *,
+        threshold: float | None = None,
+        max_uncertainty: float | None = None,
+    ) -> bool:
+        """Return True iff the agent's opinion clears every configured threshold.
+
+        `threshold` (the trust floor) defaults to `config.trust_threshold`.
+        `max_uncertainty`, if given, blocks decisions on opinions that are
+        too vacuous to act on — even when the scalar trust projection meets
+        the floor. When the policy blocks, the rejection reason is set as
+        `gen_ai.trust.rejection_reason` on the active span so the explanation
+        and tracing systems can name *which* threshold failed.
+        """
+        from multitrust.manager.policy import (
+            REJECTION_AGENT_NOT_FOUND,
+            REJECTION_TRUST_BELOW_MIN,
+            REJECTION_UNCERTAINTY_ABOVE_MAX,
+        )
+
         t = threshold if threshold is not None else self._config.trust_threshold
-        with trust_span(
-            SPAN_IS_TRUSTED,
-            {
-                "gen_ai.trust.agent_id": agent_id,
-                "gen_ai.trust.threshold": t,
-            },
-        ) as span:
-            try:
-                trust = await self.get_trust(agent_id)
-                trusted = trust >= t
-                if span is not None:
-                    span.set_attribute("gen_ai.trust.score", trust)
-                    span.set_attribute("gen_ai.trust.decision", "allow" if trusted else "block")
-                return trusted
-            except AgentNotFoundError:
+        if max_uncertainty is not None and not 0.0 <= max_uncertainty <= 1.0:
+            raise ValueError(f"max_uncertainty must be in [0, 1] when set, got {max_uncertainty}")
+        span_attrs: dict[str, Any] = {
+            "gen_ai.trust.agent_id": agent_id,
+            "gen_ai.trust.threshold": t,
+        }
+        if max_uncertainty is not None:
+            span_attrs["gen_ai.trust.max_uncertainty"] = max_uncertainty
+        with trust_span(SPAN_IS_TRUSTED, span_attrs) as span:
+            record = await self._store.get(agent_id)
+            if record is None:
                 if span is not None:
                     span.set_attribute("gen_ai.trust.decision", "block")
                     span.set_attribute("gen_ai.trust.agent_found", False)
+                    span.set_attribute("gen_ai.trust.rejection_reason", REJECTION_AGENT_NOT_FOUND)
                 return False
+            trust = record.trustworthiness
+            uncertainty = record.opinion.uncertainty
+            if trust < t:
+                if span is not None:
+                    span.set_attribute("gen_ai.trust.score", trust)
+                    span.set_attribute("gen_ai.trust.uncertainty", uncertainty)
+                    span.set_attribute("gen_ai.trust.decision", "block")
+                    span.set_attribute("gen_ai.trust.rejection_reason", REJECTION_TRUST_BELOW_MIN)
+                return False
+            if max_uncertainty is not None and uncertainty > max_uncertainty:
+                if span is not None:
+                    span.set_attribute("gen_ai.trust.score", trust)
+                    span.set_attribute("gen_ai.trust.uncertainty", uncertainty)
+                    span.set_attribute("gen_ai.trust.decision", "block")
+                    span.set_attribute(
+                        "gen_ai.trust.rejection_reason",
+                        REJECTION_UNCERTAINTY_ABOVE_MAX,
+                    )
+                return False
+            if span is not None:
+                span.set_attribute("gen_ai.trust.score", trust)
+                span.set_attribute("gen_ai.trust.uncertainty", uncertainty)
+                span.set_attribute("gen_ai.trust.decision", "allow")
+            return True
 
     async def rank_agents(self, agent_ids: list[str] | None = None) -> list[tuple[str, float]]:
         with trust_span(SPAN_RANK_AGENTS) as span:

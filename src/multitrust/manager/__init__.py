@@ -1,4 +1,9 @@
-from multitrust.manager.policy import DecisionPolicy, ThresholdPolicy, TrustPolicy
+from multitrust.manager.policy import (
+    DecisionPolicy,
+    PolicyDecision,
+    ThresholdPolicy,
+    TrustPolicy,
+)
 from multitrust.manager.trust_authority import DistributedAuthority, TrustAuthority
 from multitrust.manager.trust_manager import TrustManager
 
@@ -9,4 +14,5 @@ __all__ = [
     "TrustPolicy",
     "DecisionPolicy",
     "ThresholdPolicy",
+    "PolicyDecision",
 ]

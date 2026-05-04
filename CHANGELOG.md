@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Phase 2 — Trust Intelligence (task groups 1 & 2)** lands the
+  uncertainty-aware policy and the drift helper:
+  - `ThresholdPolicy(min_trust=..., max_uncertainty=...)` now gates on
+    both the scalar trust projection and the opinion's uncertainty.
+    The legacy `ThresholdPolicy(threshold=...)` keyword still works
+    bit-for-bit. New `evaluate()` method returns a structured
+    `PolicyDecision` (`allowed`, `reason`, `trust_score`,
+    `uncertainty`); `check()` keeps its bool contract.
+  - `TrustManager.is_trusted(..., max_uncertainty=...)` and
+    `SyncTrustManager.is_trusted(...)` accept the new gate. Tracing
+    surfaces `gen_ai.trust.rejection_reason` naming which threshold
+    failed (`trust_below_min_trust`,
+    `uncertainty_above_max_uncertainty`, or `agent_not_found`).
+  - New public subpackage `multitrust.intelligence` ships
+    `detect_drift(history, *, window=None, threshold=0.2)` and the
+    `DriftReport` dataclass. Pure function, L1 distance over
+    `(belief, disbelief, uncertainty)`, no I/O.
+  - New public symbols re-exported from `multitrust`: `PolicyDecision`,
+    `detect_drift`, `DriftReport`, `DEFAULT_DRIFT_THRESHOLD`.
+  - Hypothesis property tests under `tests/policies/` and
+    `tests/intelligence/` cover vacuous-opinion rejection, scalar-only
+    equivalence, threshold composition, drift monotonicity, symmetry,
+    and edge cases.
+  - Cookbook `docs/cookbook/gating.md` and `docs/cookbook/drift.md`
+    updated to teach the new APIs; `docs/api-surface.md` inventory
+    extended with a new "Intelligence" section.
+
 - **Phase 1 — Adoption & Onboarding** documentation surface:
   - `docs/index.md` is now a five-minute quickstart landing page.
   - `examples/quickstart.py`, `examples/multi_source_fusion.py`,
