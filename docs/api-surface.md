@@ -58,12 +58,15 @@ document. Both directions matter:
 
 | Name | Tag | Purpose |
 | --- | --- | --- |
-| `TrustExplanation` | App | Top-level structure returned by `TrustManager.explain_trust` covering opinion, contributors, decay, and decision reasoning. |
+| `TrustExplanation` | App | Top-level structure returned by `TrustManager.explain_trust` covering opinion, contributors, decay, decision reasoning, and (when an `EvidenceLedger` is configured) change-over-time deltas. |
 | `TrustProjection` | App | Projected trust at a future time horizon (component of `TrustExplanation`). |
 | `EvidenceContribution` | App | Per-authority/rule contribution to the current opinion (component of `TrustExplanation`). |
 | `EvidenceSummary` | App | Aggregate evidence statistics (component of `TrustExplanation`). |
 | `DecayInfo` | App | Decay state and configuration snapshot (component of `TrustExplanation`). |
 | `DecisionExplanation` | App | Allow/block reasoning produced when the active policy is explainable. |
+| `OpinionDelta` | App | Per-component movement (`belief_delta`, `disbelief_delta`, `uncertainty_delta`, `trust_delta`) plus the window endpoints over an `explain_trust(lookback=...)` window. Only populated when an `EvidenceLedger` is configured. |
+| `ContributorChange` | App | Per-`(authority_id, rule_name)` evidence delta over the same window. Returned as `TrustExplanation.contributor_diff`. |
+| `DEFAULT_EXPLAIN_LOOKBACK_SECONDS` | App | Default `explain_trust(lookback=...)` window in seconds (`86400.0` — 24 hours). Exposed so callers reference the same constant when overriding. |
 
 ### Errors (`multitrust.core.errors`)
 
@@ -155,6 +158,16 @@ document. Both directions matter:
 | `CallbackCollector` | App | Collector that runs a dict of named async callbacks in parallel. |
 | `EvidenceRule` | Integration | Structural Protocol for rules — `name` plus `evaluate(context) -> EvidenceResult \| None`. |
 | `RuleEngine` | Review-before-1.0 | Internal helper that drives a list of rules; `RuleBasedCollector` wraps it. Confirm whether app code should construct one directly, or whether this should drop to `_RuleEngine`. |
+
+### Built-in evidence rules (`multitrust.evidence.builtin`)
+
+| Name | Tag | Purpose |
+| --- | --- | --- |
+| `ConsensusRule` | App | Maps `context["agreement_ratio"]` (0–1) to positive/negative evidence proportions. |
+| `LatencyRule` | App | Positive evidence when `context["latency_ms"]` is at or below a configured threshold; negative otherwise. |
+| `ResponseQualityRule` | App | Reads `context["score"]` (0–1, fallback `context["response_quality"]`) and clamps to per-component evidence. |
+| `SchemaValidationRule` | App | Validates `context["output"]` (configurable field) against a constrained JSON-Schema-shaped check (`type`, `required`, `properties`, `items`, `enum`, numeric/string bounds, `pattern`). Conformant → positive; off-schema → negative with a `reason` in metadata. Constructor raises `InvalidEvidenceError` on a malformed schema (no `jsonschema` runtime dep). |
+| `TaskCompletionRule` | App | Positive evidence on `context["success"] is True`; negative on `False`. |
 
 ### Generic integrations (`multitrust.integrations.generic`)
 

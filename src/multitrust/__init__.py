@@ -14,10 +14,12 @@ from multitrust.core.errors import (
 )
 from multitrust.core.evidence import Evidence, EvidenceResult
 from multitrust.core.explanation import (
+    ContributorChange,
     DecayInfo,
     DecisionExplanation,
     EvidenceContribution,
     EvidenceSummary,
+    OpinionDelta,
     TrustExplanation,
     TrustProjection,
 )
@@ -40,6 +42,13 @@ from multitrust.evaluation import (
     report_to_json,
     report_to_markdown,
 )
+from multitrust.evidence.builtin import (
+    ConsensusRule,
+    LatencyRule,
+    ResponseQualityRule,
+    SchemaValidationRule,
+    TaskCompletionRule,
+)
 from multitrust.evidence.collector import CallbackCollector, EvidenceCollector, RuleBasedCollector
 from multitrust.evidence.rules import EvidenceRule, RuleEngine
 from multitrust.integrations.generic.context import TrustContext
@@ -55,7 +64,11 @@ from multitrust.manager.policy import (
 from multitrust.manager.sync import SyncTrustManager
 from multitrust.manager.timeline import TimelinePoint, TrustTimeline, generate_trust_timeline
 from multitrust.manager.trust_authority import DistributedAuthority, TrustAuthority
-from multitrust.manager.trust_manager import AUTHORITY_METADATA_FLAG, TrustManager
+from multitrust.manager.trust_manager import (
+    AUTHORITY_METADATA_FLAG,
+    DEFAULT_EXPLAIN_LOOKBACK_SECONDS,
+    TrustManager,
+)
 from multitrust.observability.events import (
     AgentRegisteredEvent,
     EventBus,
@@ -106,6 +119,9 @@ __all__ = [
     "EvidenceSummary",
     "DecayInfo",
     "DecisionExplanation",
+    "OpinionDelta",
+    "ContributorChange",
+    "DEFAULT_EXPLAIN_LOOKBACK_SECONDS",
     # Errors
     "MultiTrustError",
     "InvalidOpinionError",
@@ -161,6 +177,12 @@ __all__ = [
     "RuleBasedCollector",
     "EvidenceRule",
     "RuleEngine",
+    # Built-in evidence rules
+    "ConsensusRule",
+    "LatencyRule",
+    "ResponseQualityRule",
+    "SchemaValidationRule",
+    "TaskCompletionRule",
     # Intelligence
     "detect_drift",
     "DriftReport",

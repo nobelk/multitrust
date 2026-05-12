@@ -13,10 +13,12 @@ from multitrust.config.settings import MultiTrustConfig
 from multitrust.core.errors import AgentNotFoundError, AuthorityNotFoundError
 from multitrust.core.evidence import Evidence
 from multitrust.core.explanation import (
+    ContributorChange,
     DecayInfo,
     DecisionExplanation,
     EvidenceContribution,
     EvidenceSummary,
+    OpinionDelta,
     TrustExplanation,
     TrustProjection,
 )
@@ -52,6 +54,14 @@ from multitrust.storage.memory import InMemoryTrustStore
 
 AUTHORITY_METADATA_FLAG = "is_authority"
 """Metadata key that marks a TrustRecord as representing a registered authority."""
+
+DEFAULT_EXPLAIN_LOOKBACK_SECONDS: float = 86400.0
+"""Default `explain_trust(lookback=...)` window — 24 hours.
+
+Chosen to match the longest item in `_DEFAULT_HORIZONS`: callers reading the
+projection table see "24h" once and naturally interpret the delta on the same
+scale. Override per-call when investigating shorter regressions or longer
+trends."""
 
 
 def _format_horizon(seconds: float) -> str:
@@ -400,11 +410,22 @@ class TrustManager:
         threshold: float | None = None,
         projection_horizons: list[float] | None = None,
         top_k_contributors: int = 5,
+        lookback: float | None = None,
     ) -> TrustExplanation:
         """Return a structured explanation of an agent's current trust state.
 
+        `lookback` (seconds) controls the window for `delta_over_time` and
+        `contributor_diff`. Defaults to `DEFAULT_EXPLAIN_LOOKBACK_SECONDS`
+        (24 hours). When no `EvidenceLedger` is configured, both delta
+        fields are `None` and a limitation is recorded.
+
         This method is read-only and does not acquire the write lock.
         """
+        if lookback is not None and lookback <= 0:
+            raise ValueError(f"lookback must be > 0 when set, got {lookback}")
+        effective_lookback = (
+            DEFAULT_EXPLAIN_LOOKBACK_SECONDS if lookback is None else float(lookback)
+        )
         from multitrust.manager.policy import TrustPolicy
 
         with trust_span(
@@ -446,6 +467,8 @@ class TrustManager:
 
             # --- 2. Authority attribution ---
             top_contributors: list[EvidenceContribution] = []
+            delta_over_time: OpinionDelta | None = None
+            contributor_diff: list[ContributorChange] | None = None
             if self._evidence_ledger is not None:
                 entries = await self._evidence_ledger.query(agent_id)
                 # Group by (authority_id, rule_name)
@@ -501,6 +524,88 @@ class TrustManager:
                         "Evidence ledger uses bounded storage; "
                         "attribution is windowed, not lifetime-complete"
                     )
+
+                # --- 2b. Change-over-time deltas (Task 2.3) ---
+                #
+                # Reconstruction caveat: we replay ledger evidence with
+                # `evidence_to_opinion`, which is faithful when only positive /
+                # negative evidence drives the opinion. Three other mutators
+                # are not represented in `from_opinion`:
+                #   * `submit_discounted_opinion` writes a `discounted_opinion`
+                #     entry — visible to us, so we surface a limitation when
+                #     one fell inside the window.
+                #   * Admin reset / reseed writes an `admin` entry — same
+                #     handling as discounted opinions.
+                #   * `apply_decay()` writes nothing to the ledger — genuinely
+                #     unobservable here. Documented in the cookbook.
+                anchor_ts = now - effective_lookback
+                evidence_entries: list[EvidenceLedgerEntry] = []
+                window_has_discounted = False
+                window_has_admin = False
+                for e in entries:
+                    if e.entry_type == "evidence":
+                        evidence_entries.append(e)
+                    elif e.timestamp >= anchor_ts:
+                        if e.entry_type == "discounted_opinion":
+                            window_has_discounted = True
+                        elif e.entry_type == "admin":
+                            window_has_admin = True
+                evidence_entries.sort(key=lambda x: x.timestamp)
+
+                pre_pos = 0.0
+                pre_neg = 0.0
+                window_count = 0
+                window_groups: dict[tuple[str, str | None], list[EvidenceLedgerEntry]] = {}
+                for e in evidence_entries:
+                    if e.timestamp < anchor_ts:
+                        pre_pos += e.positive
+                        pre_neg += e.negative
+                    else:
+                        window_count += 1
+                        window_groups.setdefault((e.authority_id, e.rule_name), []).append(e)
+
+                if window_has_discounted:
+                    limitations.append(
+                        "from_opinion reconstruction excludes discounted-authority "
+                        "submissions in the window; magnitude is approximate"
+                    )
+                if window_has_admin:
+                    limitations.append(
+                        "Administrative actions (reset/reseed) occurred in the window; "
+                        "from_opinion does not reflect them"
+                    )
+
+                from_opinion = (
+                    evidence_to_opinion(pre_pos, pre_neg)
+                    if (pre_pos + pre_neg) > 0
+                    else Opinion.vacuous(base_rate=self._config.default_base_rate)
+                )
+                to_opinion = opinion
+                delta_over_time = OpinionDelta(
+                    from_opinion=from_opinion,
+                    to_opinion=to_opinion,
+                    belief_delta=to_opinion.belief - from_opinion.belief,
+                    disbelief_delta=to_opinion.disbelief - from_opinion.disbelief,
+                    uncertainty_delta=to_opinion.uncertainty - from_opinion.uncertainty,
+                    trust_delta=to_opinion.trustworthiness - from_opinion.trustworthiness,
+                    lookback_seconds=effective_lookback,
+                    evidence_count_delta=window_count,
+                )
+
+                contributor_diff = [
+                    ContributorChange(
+                        authority_id=auth_id,
+                        rule_name=rule_name,
+                        positive_delta=sum(e.positive for e in group_entries),
+                        negative_delta=sum(e.negative for e in group_entries),
+                        evidence_count_delta=len(group_entries),
+                    )
+                    for (auth_id, rule_name), group_entries in window_groups.items()
+                ]
+                contributor_diff.sort(
+                    key=lambda c: c.positive_delta + c.negative_delta,
+                    reverse=True,
+                )
             else:
                 limitations.append(
                     "No evidence ledger configured; authority/rule attribution unavailable"
@@ -586,6 +691,8 @@ class TrustManager:
                 evidence_summary=evidence_summary,
                 decay=decay_info,
                 decision=decision,
+                delta_over_time=delta_over_time,
+                contributor_diff=contributor_diff,
             )
 
     async def get_trust(self, agent_id: str) -> float:

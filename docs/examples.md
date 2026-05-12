@@ -59,6 +59,21 @@ cautious than either link alone. Source:
 Reach for it when: trust is delegated through intermediaries (e.g., a
 broker that vouches for downstream services).
 
+## Schema-validation rule
+
+An agent is supposed to return JSON like
+`{"answer": "<string>", "confidence": <0..1>}`. `SchemaValidationRule`
+turns each off-schema response into negative evidence so the agent's
+trust drops the moment it starts hallucinating shapes — no custom
+evaluator code. Source:
+[`examples/schema_validation_rule.py`](https://github.com/nobelk/multitrust/blob/main/examples/schema_validation_rule.py).
+
+Reach for it when: your agent emits structured output and you want
+shape-conformance baked into the trust signal alongside latency,
+quality, and consensus.
+
+Cookbook neighbour: [Schema validation](cookbook/schema-validation.md).
+
 ## Hallucination firewall
 
 The original end-to-end demo: a multi-agent research pipeline with a

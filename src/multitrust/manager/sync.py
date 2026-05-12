@@ -119,6 +119,7 @@ class SyncTrustManager:
         threshold: float | None = None,
         projection_horizons: list[float] | None = None,
         top_k_contributors: int = 5,
+        lookback: float | None = None,
     ) -> TrustExplanation:
         return self._run(
             self._manager.explain_trust(
@@ -126,6 +127,7 @@ class SyncTrustManager:
                 threshold=threshold,
                 projection_horizons=projection_horizons,
                 top_k_contributors=top_k_contributors,
+                lookback=lookback,
             )
         )
 

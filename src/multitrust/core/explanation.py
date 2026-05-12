@@ -71,6 +71,69 @@ class DecayInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class OpinionDelta:
+    """Movement in an agent's opinion across an `explain_trust()` lookback window.
+
+    `from_opinion` is the reconstructed opinion at the window anchor (the
+    cumulative state of pre-window evidence, mapped through
+    `evidence_to_opinion`). `to_opinion` is the current opinion as stored.
+    Per-component deltas are signed (`to - from`), so a positive
+    `belief_delta` means belief grew over the window. `trust_delta` mirrors
+    the scalar projection so callers can show "trust moved +0.12 over the
+    last 24h" without rederiving it.
+
+    `evidence_count_delta` is the number of ledger `entry_type="evidence"`
+    rows that arrived during the window. It can be `0` even when the
+    opinion moved (e.g., decay applied without new evidence) — the field
+    answers "did new evidence drive this?" not "is anything happening?".
+    """
+
+    from_opinion: Opinion
+    to_opinion: Opinion
+    belief_delta: float
+    disbelief_delta: float
+    uncertainty_delta: float
+    trust_delta: float
+    lookback_seconds: float
+    evidence_count_delta: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "from_opinion": self.from_opinion.to_dict(),
+            "to_opinion": self.to_opinion.to_dict(),
+            "belief_delta": self.belief_delta,
+            "disbelief_delta": self.disbelief_delta,
+            "uncertainty_delta": self.uncertainty_delta,
+            "trust_delta": self.trust_delta,
+            "lookback_seconds": self.lookback_seconds,
+            "evidence_count_delta": self.evidence_count_delta,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ContributorChange:
+    """How much a single `(authority_id, rule_name)` group moved during the window.
+
+    Granularity matches `EvidenceContribution`: one entry per
+    `(authority_id, rule_name)` key — the same composite key the current
+    contributor list groups by — so a UI can render "before / after"
+    against the same rows. `positive_delta` and `negative_delta` are
+    additive evidence-count changes (always `>= 0`, since the ledger is
+    append-only). `evidence_count_delta` is the per-group entry count
+    over the window.
+    """
+
+    authority_id: str
+    rule_name: str | None
+    positive_delta: float
+    negative_delta: float
+    evidence_count_delta: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
 class DecisionExplanation:
     """Explains a decision when the active policy is explainable."""
 
@@ -113,6 +176,12 @@ class TrustExplanation:
     # 4. Decision reasoning
     decision: DecisionExplanation | None
 
+    # 5. Change over time (Phase 2 / Task 2.3 — additive; both fields are
+    #    `None` when no `EvidenceLedger` is configured or no history is
+    #    reachable for the lookback window).
+    delta_over_time: OpinionDelta | None = None
+    contributor_diff: list[ContributorChange] | None = None
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "agent_id": self.agent_id,
@@ -127,6 +196,14 @@ class TrustExplanation:
             "evidence_summary": self.evidence_summary.to_dict(),
             "decay": self.decay.to_dict(),
             "decision": self.decision.to_dict() if self.decision is not None else None,
+            "delta_over_time": (
+                self.delta_over_time.to_dict() if self.delta_over_time is not None else None
+            ),
+            "contributor_diff": (
+                [c.to_dict() for c in self.contributor_diff]
+                if self.contributor_diff is not None
+                else None
+            ),
         }
 
     def summary(self) -> str:
@@ -179,6 +256,33 @@ class TrustExplanation:
                 f"{p.horizon_label}\u2192{p.projected_trust:.2f}" for p in self.projected_trust
             )
             lines.append(f"  Projected trust: {projections}")
+
+        if self.delta_over_time is not None:
+            delta = self.delta_over_time
+            window_hours = delta.lookback_seconds / 3600
+            lines.append(
+                f"  Change over last {window_hours:.0f}h: "
+                f"trust {delta.trust_delta:+.2f}  "
+                f"b{delta.belief_delta:+.2f}  "
+                f"d{delta.disbelief_delta:+.2f}  "
+                f"u{delta.uncertainty_delta:+.2f}  "
+                f"({delta.evidence_count_delta} new evidence)"
+            )
+
+        if self.contributor_diff:
+            lines.append("  Top movers in window:")
+            top_movers = sorted(
+                self.contributor_diff,
+                key=lambda mover: mover.positive_delta + mover.negative_delta,
+                reverse=True,
+            )[:3]
+            for i, mover in enumerate(top_movers, 1):
+                rule = mover.rule_name or "—"
+                lines.append(
+                    f'    {i}. authority="{mover.authority_id}"  rule="{rule}"  '
+                    f"+{mover.positive_delta:.0f}/-{mover.negative_delta:.0f}  "
+                    f"({mover.evidence_count_delta} entries)"
+                )
 
         if self.completeness == "partial" and self.limitations:
             lines.append(f"  Limitations: {'; '.join(self.limitations)}")

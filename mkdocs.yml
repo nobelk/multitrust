@@ -38,6 +38,8 @@ nav:
   - Cookbook:
     - Gating: cookbook/gating.md
     - Drift: cookbook/drift.md
+    - Explanation deltas: cookbook/explanation-deltas.md
+    - Schema validation: cookbook/schema-validation.md
     - Decay tuning: cookbook/decay-tuning.md
     - Ledger configuration: cookbook/ledger-configuration.md
     - Snapshot & restore: cookbook/snapshot-restore.md

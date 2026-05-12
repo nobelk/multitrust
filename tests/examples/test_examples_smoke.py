@@ -27,6 +27,7 @@ EXAMPLE_MODULES = [
     "multi_source_fusion",
     "trust_decay",
     "authority_discounting",
+    "schema_validation_rule",
 ]
 
 

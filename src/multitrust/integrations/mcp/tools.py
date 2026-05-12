@@ -166,6 +166,14 @@ def get_mcp_tool_definitions() -> list[dict[str, Any]]:
                         "minimum": 1,
                         "description": "How many top evidence contributors to include.",
                     },
+                    "lookback": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": (
+                            "Window in seconds for delta_over_time / contributor_diff. "
+                            "Defaults to 24 hours when omitted."
+                        ),
+                    },
                 },
                 "required": ["agent_id"],
             },
@@ -294,6 +302,8 @@ class TrustMCPWrapper:
             kwargs["threshold"] = float(args["threshold"])
         if "top_k_contributors" in args and args["top_k_contributors"] is not None:
             kwargs["top_k_contributors"] = int(args["top_k_contributors"])
+        if "lookback" in args and args["lookback"] is not None:
+            kwargs["lookback"] = float(args["lookback"])
         explanation = await self._manager.explain_trust(agent_id, **kwargs)
         result: dict[str, Any] = explanation.to_dict()
         return result

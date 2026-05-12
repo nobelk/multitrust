@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Phase 2 — Trust Intelligence (task groups 3 & 4)** finishes the
+  explanation deltas and the schema-validation rule:
+  - `TrustManager.explain_trust()` (and `SyncTrustManager.explain_trust()`)
+    now accepts a `lookback` parameter (default
+    `DEFAULT_EXPLAIN_LOOKBACK_SECONDS`, 24 hours) and returns two new
+    optional fields: `delta_over_time: OpinionDelta | None` (per-component
+    movement plus the window endpoints) and
+    `contributor_diff: list[ContributorChange] | None` (per
+    `(authority_id, rule_name)` evidence delta over the window). Both
+    fields stay `None` when no `EvidenceLedger` is configured. The MCP
+    `explain_trust` tool exposes the same `lookback` argument.
+  - `TrustExplanation.summary()` surfaces the delta and the top movers
+    in human-readable form when present.
+  - New `SchemaValidationRule(schema=..., field="output")` under
+    `multitrust.evidence.builtin` validates structured agent output
+    against a JSON-Schema-shaped subset (`type`, `required`,
+    `properties`, `items`, `enum`, numeric/string bounds, `pattern`)
+    — stdlib only, no `jsonschema` runtime dep. Malformed schemas raise
+    `InvalidEvidenceError` at construction.
+  - New public symbols re-exported from `multitrust`: `OpinionDelta`,
+    `ContributorChange`, `DEFAULT_EXPLAIN_LOOKBACK_SECONDS`,
+    `SchemaValidationRule`, plus the previously-private builtin rules
+    (`ConsensusRule`, `LatencyRule`, `ResponseQualityRule`,
+    `TaskCompletionRule`) for symmetry.
+  - Cookbook entries `docs/cookbook/explanation-deltas.md` and
+    `docs/cookbook/schema-validation.md`; runnable example
+    `examples/schema_validation_rule.py`; new tests under
+    `tests/manager/test_explain.py` and
+    `tests/evidence/test_builtin_schema_validation.py`.
+
 - **Phase 2 — Trust Intelligence (task groups 1 & 2)** lands the
   uncertainty-aware policy and the drift helper:
   - `ThresholdPolicy(min_trust=..., max_uncertainty=...)` now gates on
